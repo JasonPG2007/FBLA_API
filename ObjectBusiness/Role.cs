@@ -8,6 +8,8 @@ namespace ObjectBusiness
 {
     public enum Role
     {
-
+        Parent,
+        Student,
+        Admin
     }
 }
