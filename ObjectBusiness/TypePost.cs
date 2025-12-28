@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace ObjectBusiness
 {
-    public enum Role
+    public enum TypePost
     {
-        Student,
-        Admin
+        Lost,
+        Found
     }
 }

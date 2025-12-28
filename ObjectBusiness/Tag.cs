@@ -6,9 +6,7 @@ using System.Threading.Tasks;
 
 namespace ObjectBusiness
 {
-    public enum Role
+    public class Tag
     {
-        Student,
-        Admin
     }
 }
