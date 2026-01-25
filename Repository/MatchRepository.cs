@@ -35,5 +35,29 @@ namespace Repository
             return isAdded;
         }
         #endregion
+
+        #region Get Match By User Id
+        public IQueryable<object> GetMatchesByUserId(int userId)
+        {
+            var isAdded = matchDAO.GetMatchesByUserId(userId);
+            return isAdded;
+        }
+        #endregion
+
+        #region Get Match By Post Id
+        public async Task<Match> GetMatchByPostId(int postId)
+        {
+            var isAdded = await matchDAO.GetMatchByPostId(postId);
+            return isAdded;
+        }
+        #endregion
+
+        #region Check Post Lost and Found Matched
+        public async Task<Match> CheckPostLostFoundMatched(int postIdLost, int postIdFound)
+        {
+            var matched = await matchDAO.CheckPostLostFoundMatched(postIdLost, postIdFound);
+            return matched;
+        }
+        #endregion
     }
 }

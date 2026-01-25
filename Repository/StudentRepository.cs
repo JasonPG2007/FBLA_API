@@ -35,5 +35,19 @@ namespace Repository
             return studentDAO.AllStudents();
         }
         #endregion
+
+        #region Get Student By Id
+        public async Task<Student> GetStudentById(int studentId)
+        {
+            return await studentDAO.GetStudentById(studentId);
+        }
+        #endregion
+
+        #region Get Student By User Id
+        public Student GetStudentByUserId(int userId)
+        {
+            return studentDAO.GetStudentByUserId(userId);
+        }
+        #endregion
     }
 }

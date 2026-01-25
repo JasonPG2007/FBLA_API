@@ -11,5 +11,6 @@ namespace Repository
     {
         public IQueryable<CategoryPost> AllCategoryPosts();
         public IQueryable<CategoryPost> SearchCategoryPost(string query);
+        public CategoryPost GetCategoryPostById(int categoryId);
     }
 }

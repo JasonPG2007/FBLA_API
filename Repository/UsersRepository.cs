@@ -32,18 +32,42 @@ namespace Repository
         }
         #endregion
 
-        #region GET User By Student Id
-        public Users GetUserByStudentId(int studentId)
+        #region Search Users By Email
+        public IQueryable<Users> SearchUserByEmail(string query)
         {
-            var user = usersDAO.GetUserByStudentId(studentId);
+            var listUser = usersDAO.SearchUserByEmail(query);
+            return listUser;
+        }
+        #endregion
+
+        #region GET User By Student Id
+        public async Task<Users> GetUserByStudentId(int studentId)
+        {
+            var user = await usersDAO.GetUserByStudentId(studentId);
             return user;
         }
         #endregion
 
         #region Get user By Email
-        public Users GetUserByEmail(string email)
+        public async Task<Users> GetUserByEmail(string email)
         {
-            var user = usersDAO.GetUserByEmail(email);
+            var user = await usersDAO.GetUserByEmail(email);
+            return user;
+        }
+        #endregion
+
+        #region Get Admin
+        public Users GetAdmin()
+        {
+            var user = usersDAO.GetAdmin();
+            return user;
+        }
+        #endregion
+
+        #region Get user By ID
+        public async Task<Users> GetUserByID(int userId)
+        {
+            var user = await usersDAO.GetUserByID(userId);
             return user;
         }
         #endregion
@@ -67,7 +91,10 @@ namespace Repository
         {
             if (studentId == 0 && email != null)
             {
-                var user = studentId > 0 ? usersDAO.GetUserByStudentId(studentId) : GetUserByEmail(email);
+                var user = studentId > 0
+                    ? await usersDAO.GetUserByStudentId(studentId)
+                    : await GetUserByEmail(email);
+
                 if (user != null && BCrypt.Net.BCrypt.EnhancedVerify(password, user.Password))
                 {
                     return user;
@@ -76,13 +103,37 @@ namespace Repository
             }
             else
             {
-                var user = GetUserByStudentId(studentId);
+                var user = await GetUserByStudentId(studentId);
                 if (user != null && BCrypt.Net.BCrypt.EnhancedVerify(password, user.Password))
                 {
                     return user;
                 }
                 return null;
             }
+        }
+        #endregion
+
+        #region Update user
+        public async Task<bool> UpdateUser()
+        {
+            var isUpdated = await usersDAO.UpdateUser();
+            return isUpdated;
+        }
+        #endregion
+
+        #region Suspend user
+        public async Task<bool> SuspendUser()
+        {
+            var isSuspended = await usersDAO.SuspendUser();
+            return isSuspended;
+        }
+        #endregion
+
+        #region Unsuspend user
+        public async Task<bool> UnsuspendUser()
+        {
+            var isSuspended = await usersDAO.UnsuspendUser();
+            return isSuspended;
         }
         #endregion
     }

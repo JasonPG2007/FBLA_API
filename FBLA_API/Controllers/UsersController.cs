@@ -1,10 +1,17 @@
 ﻿using FBLA_API.DTOs.Auth;
+using FBLA_API.DTOs.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json.Linq;
 using ObjectBusiness;
 using Repository;
+using Services;
+using SignalRLayer;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -23,58 +30,104 @@ namespace FBLA_API.Controllers
         private readonly IStudentRepository studentRepository;
         private readonly IWebHostEnvironment webHost;
         private readonly IConfiguration configuration;
+        private readonly IMemoryCache memoryCache;
+        private readonly EmailSender emailSender;
+        private readonly IHubContext<SystemHub> hubContext;
         #endregion
 
         #region Constructor
         public UsersController(IUsersRepository usersRepository,
                                IWebHostEnvironment webHost,
                                IConfiguration configuration,
-                               IStudentRepository studentRepository)
+                               IStudentRepository studentRepository,
+                               IMemoryCache memoryCache,
+                               EmailSender emailSender,
+                               IHubContext<SystemHub> hubContext)
         {
             this.usersRepository = usersRepository;
+            this.memoryCache = memoryCache;
+            this.hubContext = hubContext;
             this.webHost = webHost;
             this.configuration = configuration;
             this.studentRepository = studentRepository;
+            this.emailSender = emailSender;
         }
         #endregion
 
         // GET: api/<UsersController>
-        [Authorize]
+        #region Get All Users
+        [Authorize(Roles = "Admin")]
         [HttpGet]
-        public IQueryable<Users> Get()
+        public async Task<ActionResult<List<Users>>> Get()
         {
-            return usersRepository.AllUsers();
-        }
-
-        // GET My Profile: api/<UsersController>
-        [Authorize]
-        [HttpGet("profile")]
-        public IActionResult GetMyProfile()
-        {
-            var userEmail = User.FindFirst(ClaimTypes.NameIdentifier)?.Value; // Get User email from user signed in in JWT (AccessToken)
-
-            if (userEmail == null)
-            {
-                return Unauthorized("User not authenticated");
-            }
-
-            var user = usersRepository.GetUserByEmail(userEmail);
-
-            if (user == null)
-            {
-                return NotFound("User not found");
-            }
-
-            user.UrlAvatar = $"{Request.Scheme}://{Request.Host}/uploads/{user.Avatar}";
-
-            return Ok(new
+            var users = await usersRepository.AllUsers().ToListAsync();
+            var results = users.Select(user => new
             {
                 user.UserId,
                 user.FirstName,
                 user.LastName,
                 user.Email,
-                Role = user.Role.ToString(),
+                user.Role,
+                user.Avatar,
+                UrlAvatar = user.UrlAvatar = $"{Request.Scheme}://{Request.Host}/Uploads/{user.Avatar}",
+                user.IsActive,
+                user.IsAgreedToTerms,
+                user.IsVerifiedEmail,
+                user.CreatedAt,
+                user.StudentId
+            });
 
+            return Ok(results);
+        }
+        #endregion
+
+        #region Search Email
+        [Authorize(Roles = "Admin")]
+        [HttpGet("search-email")]
+        public async Task<ActionResult<List<Users>>> SearchEmail([FromQuery] string query)
+        {
+            var users = await usersRepository.SearchUserByEmail(query).ToListAsync();
+            return Ok(users);
+        }
+        #endregion
+
+        // GET My Profile: api/<UsersController>
+        #region Get My Profile
+        [Authorize]
+        [HttpGet("profile")]
+        public async Task<ActionResult> GetMyProfile()
+        {
+            var userEmail = User.FindFirst(ClaimTypes.NameIdentifier)?.Value; // Get User email from user signed in in JWT (AccessToken)
+
+            if (userEmail == null)
+            {
+                return Unauthorized(new
+                {
+                    message = "User not authenticated"
+                });
+            }
+
+            var user = await usersRepository.GetUserByEmail(userEmail);
+
+            if (user == null)
+            {
+                return NotFound(new
+                {
+                    Message = "User not found"
+                });
+            }
+
+            return Ok(new
+            {
+                UserId = user.UserId,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                Avatar = user.Avatar,
+                UrlAvatar = user.UrlAvatar = $"{Request.Scheme}://{Request.Host}/Uploads/{user.Avatar}",
+                Email = user.Email,
+                Role = user.Role,
+                DateOfBirth = user.DateOfBirth,
+                IsVerifiedEmail = user.IsVerifiedEmail,
                 Student = user.Student == null
                      ? null
                      : new
@@ -84,6 +137,7 @@ namespace FBLA_API.Controllers
                      }
             });
         }
+        #endregion
 
         // GET api/<UsersController>/5
         [HttpGet("{id}")]
@@ -93,19 +147,23 @@ namespace FBLA_API.Controllers
         }
 
         // POST api/<UsersController>
+        #region Sign Up
         [HttpPost("sign-up")]
-        public async Task<IActionResult> SignUp([FromBody] Users user)
+        public async Task<ActionResult> SignUp([FromBody] Users user)
         {
-            if (!ModelState.IsValid)
-            {
-                var errors = ModelState.Values
-                            .SelectMany(v => v.Errors)
-                            .Select(e => e.ErrorMessage)
-                            .ToList();
+            // Check duplicate student ID
+            var existingStudentByStudentId = studentRepository.AllStudents()
+                                                                      .Any(s => s.StudentId == user.StudentId);
 
-                return BadRequest(new { Errors = errors });
+            if (existingStudentByStudentId)
+            {
+                return Conflict(new
+                {
+                    message = "Your student ID is already in use"
+                });
             }
 
+            // Check duplicate email
             var existingUserByEmail = usersRepository.AllUsers()
                                                      .Any(u => u.Email.Equals(user.Email));
 
@@ -122,17 +180,6 @@ namespace FBLA_API.Controllers
                 var isAddedUser = await usersRepository.SignUp(user);
                 if (isAddedUser)
                 {
-                    var existingStudentByStudentId = studentRepository.AllStudents()
-                                                                      .Any(s => s.StudentId == user.StudentId);
-
-                    if (existingStudentByStudentId)
-                    {
-                        return Conflict(new
-                        {
-                            message = "Your student ID is already in use"
-                        });
-                    }
-
                     var student = new Student
                     {
                         StudentId = user.StudentId,
@@ -143,7 +190,170 @@ namespace FBLA_API.Controllers
 
                     if (isAddedStudent)
                     {
-                        return Ok("Sign up successfully");
+                        // Send verification code via email
+                        var token = Guid.NewGuid().ToString();
+                        memoryCache.Set($"EMAIL_VERIFY_{token}", user.Email, TimeSpan.FromMinutes(15));
+
+                        // Send verification email
+                        // Send email verify
+                        string senderName = "Back2Me";
+                        string senderEmail = "baoandng07@gmail.com";
+                        string toName = user.FirstName + " " + user.LastName;
+                        string toEmail = user.Email;
+                        string subject = "✅ Please Verify Your Email";
+                        string content = $@"
+                        <html>
+                        <head>
+                          <style>
+                            body {{
+                                font-family: 'Segoe UI', Arial, sans-serif;
+                                line-height: 1.6;
+                                color: #072138;
+                                background-color: #f9f9fb;
+                                padding: 20px;
+                            }}
+                            a {{
+                                text-decoration: none !important;
+                            }}
+                            .container {{
+                                max-width: 600px;
+                                margin: auto;
+                                background: #ffffff;
+                                border-radius: 12px;
+                                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                                overflow: hidden;
+                            }}
+                            .header {{
+                                background-color: #ec7207;
+                                color: #fff;
+                                padding: 20px;
+                                text-align: center;
+                            }}
+                            .header h2 {{
+                                margin: 0;
+                                font-size: 22px;
+                            }}
+                            .content {{
+                                padding: 20px;
+                            }}
+                            .content p {{
+                                margin: 10px 0;
+                            }}
+                            .highlight {{
+                                background: #fffae6;
+                                border-left: 4px solid #ff9900;
+                                padding: 10px 15px;
+                                margin: 15px 0;
+                                border-radius: 6px;
+                            }}
+                            .btn {{
+                                display: inline-block;
+                                background-color: #ec7207;
+                                border: none;
+                                width: max-content;
+                                color: #fff !important;
+                                font-weight: 600;
+                                cursor: pointer;
+                                font-size: 16px;
+                                padding: 12px 25px;
+                                border-radius: 20px;
+                                margin-top: 10px;
+                                margin-bottom: 10px;
+                                transition: all 0.3s ease-in-out;
+                            }}
+                            .btn:hover {{
+                                transform: scale(1.05);
+                            }}
+                            .footer {{
+                                background: #f4f6f9;
+                                padding: 15px;
+                                text-align: center;
+                                font-size: 0.9em;
+                                color: #666;
+                            }}
+                          </style>
+                        </head>
+                        <body>
+                          <div class='container'>
+                            <div class='header'>
+                              <h2>✅ Verify Your Email</h2>
+                            </div>
+                            <div class='content'>
+                              <p>Hi <strong>{user.FirstName} {user.LastName}</strong>,</p>
+                              <p>Thank you for registering! Please verify your email address by clicking the button below:</p>
+
+                              <p style='text-align: center;' class='highlight'>
+                                ⚡ This verification link will expire in 15 minutes.
+                              </p>
+
+                              <p style='text-align: center;'>
+                                 <a href='https://back2me.vercel.app/verify-email?token={token}' class='btn'>✅ Verify Email</a>
+                              </p>
+
+                              <p>If you did not perform this action, you can safely ignore this email.</p>
+                            </div>
+                            <div class='footer'>
+                              <p>Best regards,<br/><strong>Back2me Team</strong></p>
+                            </div>
+                          </div>
+                        </body>
+                        </html>
+                        ";
+
+                        await emailSender.SendEmail(senderName, senderEmail, toName, toEmail, subject, content);
+
+                        // JWT config
+                        var issuer = configuration["JwtConfig:Issuer"];
+                        var audience = configuration["JwtConfig:Audience"];
+                        var key = configuration["JwtConfig:Key"];
+                        var tokenValidityMins = configuration.GetValue<int>("JwtConfig:TokenValidityMins");
+                        var tokenExpiryTimeStamp = DateTime.UtcNow.AddMinutes(tokenValidityMins); // Token expiration time
+
+                        // Create JWT access token and assign token
+                        var tokenDescriptor = new SecurityTokenDescriptor // Describe token
+                        {
+                            Subject = new ClaimsIdentity(new[]
+                            {
+                                new Claim(ClaimTypes.NameIdentifier, user.Email),
+                                new Claim(ClaimTypes.Role, user.Role.ToString()),
+                            }),
+                            Issuer = issuer,
+                            Audience = audience,
+                            Expires = tokenExpiryTimeStamp,
+                            SigningCredentials = new SigningCredentials(
+                                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+                                SecurityAlgorithms.HmacSha256Signature
+                            )
+                        };
+
+                        // Process token was described
+                        var tokenHandler = new JwtSecurityTokenHandler();
+                        var securityToken = tokenHandler.CreateToken(tokenDescriptor); // Create object JWT Token
+                        var accessToken = tokenHandler.WriteToken(securityToken); // Serialize token to string  for client
+
+                        // Assign token for client
+                        user.AccessToken = accessToken;
+                        user.ExpiresIn = (int)tokenExpiryTimeStamp.Subtract(DateTime.Now).TotalSeconds;
+
+                        //Response.Cookies.Append("AccessToken", accessToken, new CookieOptions
+                        //{
+                        //    Secure = true, // Set to true in production
+                        //    HttpOnly = true,
+                        //    SameSite = SameSiteMode.None, // If SameSite is none Secure must be true
+                        //    Expires = tokenExpiryTimeStamp // Set cookie expiration time
+                        //});
+
+                        //Response.Cookies.Append("Username", user.FirstName + user.LastName, new CookieOptions
+                        //{
+                        //    Secure = true,
+                        //    SameSite = SameSiteMode.None,
+                        //    Expires = tokenExpiryTimeStamp
+                        //});
+                        return Ok(new
+                        {
+                            Message = "Signed up successfully",
+                            AccessToken = accessToken,
+                        });
                     }
                 }
 
@@ -154,28 +364,40 @@ namespace FBLA_API.Controllers
                 return BadRequest("Something went wrong!");
             }
         }
+        #endregion
 
+        #region Sign In
         [HttpPost("sign-in")]
-        public async Task<IActionResult> SignIn([FromBody] SignInRequestDTO signInRequestDTO)
+        public async Task<ActionResult> SignIn([FromBody] SignInRequestDTO signInRequestDTO)
         {
             try
             {
                 var user = await usersRepository.SignIn(signInRequestDTO.StudentId, signInRequestDTO.Password, signInRequestDTO.Email);
+
+                if (!user.IsActive)
+                {
+                    return Forbid();
+                }
+
                 if (user != null)
                 {
                     return Ok(); // Ok to change to select image
                 }
 
-                return Unauthorized("Student ID or password is invalid");
+                return Unauthorized(signInRequestDTO.StudentId == 0 ?
+                                    "Email or password is invalid" :
+                                    "Student ID or password is invalid");
             }
             catch (Exception ex)
             {
                 return BadRequest("Something went wrong!");
             }
         }
+        #endregion
 
-        [HttpPost("select-image")]
-        public async Task<IActionResult> SelectImage([FromBody] SignInRequestDTO signInRequestDTO)
+        #region Sign In with select images
+        [HttpPost("select-images")]
+        public async Task<IActionResult> SelectImages([FromBody] SignInRequestDTO signInRequestDTO)
         {
             try
             {
@@ -227,22 +449,26 @@ namespace FBLA_API.Controllers
                         user.AccessToken = accessToken;
                         user.ExpiresIn = (int)tokenExpiryTimeStamp.Subtract(DateTime.Now).TotalSeconds;
 
-                        Response.Cookies.Append("AccessToken", accessToken, new CookieOptions
-                        {
-                            Secure = true, // Set to true in production
-                            HttpOnly = true,
-                            SameSite = SameSiteMode.None, // If SameSite is none Secure must be true
-                            Expires = tokenExpiryTimeStamp // Set cookie expiration time
-                        });
+                        //Response.Cookies.Append("AccessToken", accessToken, new CookieOptions
+                        //{
+                        //    Secure = true, // Set to true in production
+                        //    HttpOnly = true,
+                        //    SameSite = SameSiteMode.None, // If SameSite is none Secure must be true
+                        //    Expires = tokenExpiryTimeStamp // Set cookie expiration time
+                        //});
 
-                        Response.Cookies.Append("Username", user.FirstName + user.LastName, new CookieOptions
-                        {
-                            Secure = true,
-                            SameSite = SameSiteMode.None,
-                            Expires = tokenExpiryTimeStamp
-                        });
+                        //Response.Cookies.Append("Username", user.FirstName + user.LastName, new CookieOptions
+                        //{
+                        //    Secure = true,
+                        //    SameSite = SameSiteMode.None,
+                        //    Expires = tokenExpiryTimeStamp
+                        //});
 
-                        return Ok();
+                        return Ok(new
+                        {
+                            Message = "Signed in successfully",
+                            AccessToken = accessToken,
+                        });
                     }
                     else
                     {
@@ -257,6 +483,308 @@ namespace FBLA_API.Controllers
                 return BadRequest("Something went wrong!");
             }
         }
+        #endregion
+
+        #region Verify Email
+        [HttpGet("verify-email")]
+        public async Task<ActionResult> VerifyEmail([FromQuery] string token)
+        {
+            try
+            {
+                if (!memoryCache.TryGetValue($"EMAIL_VERIFY_{token}", out string userEmail))
+                {
+                    return BadRequest(new
+                    {
+                        Message = "Invalid or expired verification link"
+                    });
+                }
+
+                var user = await usersRepository.GetUserByEmail(userEmail);
+                user.IsVerifiedEmail = true;
+                var isUpdated = await usersRepository.UpdateUser();
+
+                if (isUpdated)
+                {
+                    // Send email email has been verified
+                    string senderName = "Back2Me";
+                    string senderEmail = "baoandng07@gmail.com";
+                    string toName = user.FirstName + " " + user.LastName;
+                    string toEmail = user.Email;
+                    string subject = "✅ Your Email Has Been Verified!";
+                    string content = $@"
+                        <html>
+                        <head>
+                          <style>
+                            body {{
+                                font-family: 'Segoe UI', Arial, sans-serif;
+                                line-height: 1.6;
+                                color: #072138;
+                                background-color: #f9f9fb;
+                                padding: 20px;
+                            }}
+                            a {{
+                                text-decoration: none !important;
+                            }}
+                            .container {{
+                                max-width: 600px;
+                                margin: auto;
+                                background: #ffffff;
+                                border-radius: 12px;
+                                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                                overflow: hidden;
+                            }}
+                            .header {{
+                                background-color: #28a745; /* xanh lá thành công */
+                                color: #fff;
+                                padding: 20px;
+                                text-align: center;
+                            }}
+                            .header h2 {{
+                                margin: 0;
+                                font-size: 22px;
+                            }}
+                            .content {{
+                                padding: 20px;
+                            }}
+                            .content p {{
+                                margin: 10px 0;
+                            }}
+                            .highlight {{
+                                background: #e6ffed;
+                                border-left: 4px solid #28a745;
+                                padding: 10px 15px;
+                                margin: 15px 0;
+                                border-radius: 6px;
+                                font-weight: 600;
+                                color: #155724;
+                            }}
+                            .btn {{
+                                display: inline-block;
+                                background-color: #28a745;
+                                border: none;
+                                width: max-content;
+                                color: #fff !important;
+                                font-weight: 600;
+                                cursor: pointer;
+                                font-size: 16px;
+                                padding: 12px 25px;
+                                border-radius: 20px;
+                                margin-top: 10px;
+                                margin-bottom: 10px;
+                                transition: all 0.3s ease-in-out;
+                            }}
+                            .btn:hover {{
+                                transform: scale(1.05);
+                            }}
+                            .footer {{
+                                background: #f4f6f9;
+                                padding: 15px;
+                                text-align: center;
+                                font-size: 0.9em;
+                                color: #666;
+                            }}
+                          </style>
+                        </head>
+                        <body>
+                          <div class='container'>
+                            <div class='header'>
+                              <h2>✅ Email Verified Successfully!</h2>
+                            </div>
+                            <div class='content'>
+                              <p>Hi <strong>{user.FirstName} {user.LastName}</strong>,</p>
+                              <p>Congratulations! Your email has been successfully verified.</p>
+
+                              <p class='highlight'>
+                                🎉 You can now access all features of Back2me and enjoy the full experience.
+                              </p>
+
+                              <p style='text-align: center;'>
+                                <a href='https://back2me.vercel.app/me' class='btn'>Go to Profile</a>
+                              </p>
+
+                              <p>If you did not perform this action, please contact our support team immediately.</p>
+                            </div>
+                            <div class='footer'>
+                              <p>Best regards,<br/><strong>Back2me Team</strong></p>
+                            </div>
+                          </div>
+                        </body>
+                        </html>
+                        ";
+
+                    await emailSender.SendEmail(senderName, senderEmail, toName, toEmail, subject, content);
+                }
+
+                return Ok("Verified email successfully");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest("Something went wrong!");
+            }
+        }
+        #endregion
+
+        #region Resend Verify Email
+        [HttpPost("resend-verify-email")]
+        public async Task<ActionResult> ResendVerifyEmail()
+        {
+            var userEmail = User.FindFirst(ClaimTypes.NameIdentifier)?.Value; // Get User email from user signed in in JWT (AccessToken)
+
+            if (userEmail == null)
+            {
+                return Unauthorized(new
+                {
+                    message = "User not authenticated"
+                });
+            }
+
+            var user = await usersRepository.GetUserByEmail(userEmail);
+
+            if (user == null)
+            {
+                return NotFound(new
+                {
+                    Message = "User not found"
+                });
+            }
+
+            if (user.IsVerifiedEmail)
+            {
+                return Ok(new
+                {
+                    Message = "Your email has already been verified"
+                });
+            }
+
+            var token = Guid.NewGuid().ToString();
+            var cacheKey = $"VERIFY_EMAIL_RESEND_{user.Email}";
+
+            // Check if user send resend verification
+            if (memoryCache.TryGetValue(cacheKey, out _))
+            {
+                return BadRequest(new
+                {
+                    Message = "You can resend the verification email in 2 minutes"
+                });
+            }
+
+            // Set cache: key exists in 2 mins and block resend in 2 mins
+            memoryCache.Set($"VERIFY_EMAIL_RESEND_{user.Email}", true, TimeSpan.FromMinutes(2));
+
+            // Send verification code via email
+            memoryCache.Set($"EMAIL_VERIFY_{token}", user.Email, TimeSpan.FromMinutes(15));
+
+            // Send verification email
+            // Send email verify
+            string senderName = "Back2Me";
+            string senderEmail = "baoandng07@gmail.com";
+            string toName = user.FirstName + " " + user.LastName;
+            string toEmail = user.Email;
+            string subject = "✅ Please Verify Your Email";
+            string content = $@"
+                        <html>
+                        <head>
+                          <style>
+                            body {{
+                                font-family: 'Segoe UI', Arial, sans-serif;
+                                line-height: 1.6;
+                                color: #072138;
+                                background-color: #f9f9fb;
+                                padding: 20px;
+                            }}
+                            a {{
+                                text-decoration: none !important;
+                            }}
+                            .container {{
+                                max-width: 600px;
+                                margin: auto;
+                                background: #ffffff;
+                                border-radius: 12px;
+                                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                                overflow: hidden;
+                            }}
+                            .header {{
+                                background-color: #ec7207;
+                                color: #fff;
+                                padding: 20px;
+                                text-align: center;
+                            }}
+                            .header h2 {{
+                                margin: 0;
+                                font-size: 22px;
+                            }}
+                            .content {{
+                                padding: 20px;
+                            }}
+                            .content p {{
+                                margin: 10px 0;
+                            }}
+                            .highlight {{
+                                background: #fffae6;
+                                border-left: 4px solid #ff9900;
+                                padding: 10px 15px;
+                                margin: 15px 0;
+                                border-radius: 6px;
+                            }}
+                            .btn {{
+                                display: inline-block;
+                                background-color: #ec7207;
+                                border: none;
+                                width: max-content;
+                                color: #fff !important;
+                                font-weight: 600;
+                                cursor: pointer;
+                                font-size: 16px;
+                                padding: 12px 25px;
+                                border-radius: 20px;
+                                margin-top: 10px;
+                                margin-bottom: 10px;
+                                transition: all 0.3s ease-in-out;
+                            }}
+                            .btn:hover {{
+                                transform: scale(1.05);
+                            }}
+                            .footer {{
+                                background: #f4f6f9;
+                                padding: 15px;
+                                text-align: center;
+                                font-size: 0.9em;
+                                color: #666;
+                            }}
+                          </style>
+                        </head>
+                        <body>
+                          <div class='container'>
+                            <div class='header'>
+                              <h2>✅ Verify Your Email</h2>
+                            </div>
+                            <div class='content'>
+                              <p>Hi <strong>{user.FirstName} {user.LastName}</strong>,</p>
+                              <p>Please verify your email address by clicking the button below:</p>
+
+                              <p style='text-align: center;' class='highlight'>
+                                ⚡ This verification link will expire in 15 minutes.
+                              </p>
+
+                              <p style='text-align: center;'>
+                                 <a href='https://back2me.vercel.app/verify-email?token={token}' class='btn'>✅ Verify Email</a>
+                              </p>
+
+                              <p>If you did not perform this action, you can safely ignore this email.</p>
+                            </div>
+                            <div class='footer'>
+                              <p>Best regards,<br/><strong>Back2me Team</strong></p>
+                            </div>
+                          </div>
+                        </body>
+                        </html>
+                        ";
+
+            await emailSender.SendEmail(senderName, senderEmail, toName, toEmail, subject, content);
+
+            return Ok("Verification email sent");
+        }
+        #endregion
 
         #region Sign out
         [HttpPost("sign-out")]
@@ -281,10 +809,134 @@ namespace FBLA_API.Controllers
         #endregion
 
         // PUT api/<UsersController>/5
-        [HttpPut("{id}")]
-        public void Put(int id, [FromBody] string value)
+        #region Update My Profile
+        [HttpPut("update-user")]
+        public async Task<ActionResult> Update([FromForm] UserDTO user)
         {
+            var userEmail = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (userEmail == null)
+            {
+                return Unauthorized(new
+                {
+                    message = "User not authenticated"
+                });
+            }
+
+            var userExisted = await usersRepository.GetUserByEmail(userEmail);
+
+            if (userExisted == null)
+            {
+                return NotFound(new
+                {
+                    message = "User does not found"
+                });
+            }
+
+            // Update information
+            userExisted.FirstName = user.FirstName;
+            userExisted.LastName = user.LastName;
+            userExisted.DateOfBirth = user.DateOfBirth;
+            userExisted.Avatar = user.AvatarUpload != null ?
+                                 await UploadFiles(user.AvatarUpload) : userExisted.Avatar;
+            userExisted.UpdatedAt = DateTime.Now;
+
+            var isUpdated = await usersRepository.UpdateUser();
+            if (!isUpdated)
+            {
+                return BadRequest("Update failed");
+            }
+
+            return Ok("Updated successfully");
         }
+        #endregion
+
+        #region Suspend User
+        [Authorize(Roles = "Admin")]
+        [HttpPut("suspend-user/{userId}")]
+        public async Task<ActionResult> SuspendUser(int userId)
+        {
+            var userExisted = await usersRepository.GetUserByID(userId);
+
+            if (userExisted == null)
+            {
+                return NotFound(new
+                {
+                    message = "User does not found"
+                });
+            }
+
+            // Update information
+            userExisted.FirstName = userExisted.FirstName;
+            userExisted.LastName = userExisted.LastName;
+            userExisted.DateOfBirth = userExisted.DateOfBirth;
+            userExisted.Avatar = userExisted.Avatar;
+            userExisted.UpdatedAt = DateTime.Now;
+            userExisted.IsActive = !userExisted.IsActive; // Toggle suspend status
+
+            var isSuspended = await usersRepository.SuspendUser();
+            if (!isSuspended)
+            {
+                return BadRequest("Suspend failed");
+            }
+
+            // Send to user who has been suspended
+            await hubContext.Clients.User(userExisted.Email)
+                                    .SendAsync("ReceiveForceSignOut", new
+                                    {
+                                        Message = "Your account has been suspended by the administrator"
+                                    });
+
+            // Send to all admins
+            await hubContext.Clients.Group("Admin")
+                                    .SendAsync("ReceiveUserSuspended", new
+                                    {
+                                        UserId = userExisted.UserId,
+                                    });
+
+            return Ok("Suspended successfully");
+        }
+        #endregion
+
+        #region Unsuspend User
+        [Authorize(Roles = "Admin")]
+        [HttpPut("unsuspend-user/{userId}")]
+        public async Task<ActionResult> UnsuspendUser(int userId)
+        {
+            var userExisted = await usersRepository.GetUserByID(userId);
+
+            if (userExisted == null)
+            {
+                return NotFound(new
+                {
+                    message = "User does not found"
+                });
+            }
+
+            // Update information
+            userExisted.FirstName = userExisted.FirstName;
+            userExisted.LastName = userExisted.LastName;
+            userExisted.DateOfBirth = userExisted.DateOfBirth;
+            userExisted.Avatar = userExisted.Avatar;
+            userExisted.UpdatedAt = DateTime.Now;
+            userExisted.IsActive = !userExisted.IsActive; // Toggle suspend status
+
+            var isSuspended = await usersRepository.UnsuspendUser();
+            if (!isSuspended)
+            {
+                return BadRequest("Unsuspend failed");
+            }
+
+            // Send to all admins
+            await hubContext.Clients.Group("Admin")
+                                    .SendAsync("ReceiveUserUnsuspended", new
+                                    {
+                                        UserId = userExisted.UserId,
+                                    });
+
+            return Ok("Unsuspended successfully");
+        }
+        #endregion
 
         // DELETE api/<UsersController>/5
         [HttpDelete("{id}")]
@@ -292,6 +944,7 @@ namespace FBLA_API.Controllers
         {
         }
 
+        // Functions are not related to API endpoints
         #region Upload Files
         private async Task<string> UploadFiles(IFormFile file)
         {
@@ -310,7 +963,7 @@ namespace FBLA_API.Controllers
             using FileStream stream = new FileStream(fileSavePath, FileMode.Create);
             await file.CopyToAsync(stream);
 
-            return fileSavePath;
+            return fileName;
         }
         #endregion
     }

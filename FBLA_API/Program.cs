@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using ObjectBusiness;
 using Repository;
+using Services;
+using SignalRLayer;
 using System.Text;
 using System.Text.Json.Serialization;
 
@@ -14,22 +16,22 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactWeb", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "https://back2me.vercel.app")
+        policy.WithOrigins("http://localhost:5173",
+                           "https://back2me.vercel.app")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
     });
 });
 
-// Allow automatic handle enum
+// Add Memorycache
+builder.Services.AddMemoryCache();
+
+// Add services to the container and allow automatic handle enum
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
-
-// Add services to the container.
-
-builder.Services.AddControllers();
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(options =>
@@ -57,8 +59,10 @@ builder.Services.AddAuthentication(options =>
     {
         OnMessageReceived = ctx =>
         {
-            ctx.Request.Cookies.TryGetValue("AccessToken", out var accessToken);
-            if (!string.IsNullOrEmpty(accessToken))
+            var accessToken = ctx.Request.Query["access_token"]; // For use accessTokenFactory
+            var path = ctx.HttpContext.Request.Path;
+
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/SystemHub"))
             {
                 ctx.Token = accessToken;
             }
@@ -68,29 +72,47 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+// Add SignalR
+builder.Services.AddSignalR().AddJsonProtocol(options =>
+{
+    options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()); // To handle enum serialization
+});
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Configure Dependency Injection for DAOs and Repositories
+builder.Services.AddScoped<EmailSender>();
 builder.Services.AddScoped<UsersDAO>();
 builder.Services.AddScoped<StudentDAO>();
 builder.Services.AddScoped<PostDAO>();
 builder.Services.AddScoped<CategoryPostDAO>();
 builder.Services.AddScoped<MatchDAO>();
+builder.Services.AddScoped<PickUpRequestDAO>();
 builder.Services.AddScoped<VerificationCodeDAO>();
+builder.Services.AddScoped<TransferRequestDAO>();
+builder.Services.AddScoped<ChatDAO>();
+builder.Services.AddScoped<MessageChatDAO>();
 builder.Services.AddScoped<IUsersRepository, UsersRepository>();
 builder.Services.AddScoped<IStudentRepository, StudentRepository>();
 builder.Services.AddScoped<IPostRepository, PostRepository>();
 builder.Services.AddScoped<ICategoryPostRepository, CategoryPostRepository>();
 builder.Services.AddScoped<IMatchRepository, MatchRepository>();
 builder.Services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
+builder.Services.AddScoped<ITransferRequestRepository, TransferRequestRepository>();
+builder.Services.AddScoped<IPickUpRequestRepository, PickUpRequestRepository>();
+builder.Services.AddScoped<IChatRepository, ChatRepository>();
+builder.Services.AddScoped<IMessageChatRepository, MessageChatRepository>();
 
 // Connect to SQL Server
 builder.Services.AddDbContext<FBLADbContext>(options =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("MyConnection"));
 });
+
+// Register for send email
+//builder.Services.AddTransient<EmailSender>();
 
 var app = builder.Build();
 
@@ -111,6 +133,9 @@ app.UseCors("AllowReactWeb");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Use SignalR
+app.MapHub<SystemHub>("/SystemHub");
 
 app.MapControllers();
 

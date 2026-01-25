@@ -28,5 +28,13 @@ namespace Repository
             return isAdded;
         }
         #endregion
+
+        #region Get Verification Code By Match Id
+        public async Task<VerificationCode> GetVerificationCodeByMatchId(int matchId)
+        {
+            var verificationCode = await verificationCodeDAO.GetVerificationCodeByMatchId(matchId);
+            return verificationCode;
+        }
+        #endregion
     }
 }

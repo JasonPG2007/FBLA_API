@@ -27,6 +27,8 @@ namespace ObjectBusiness
         public string? Image { get; set; }
         [Required(ErrorMessage = "Code cannot be blank")]
         public string Code { get; set; } // Use to print out and stick on the stuff
+        public bool? IsReceived { get; set; }
+        public int? OldUserId { get; set; } // Use to store student transfers post to admin
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public DateTime? UpdatedAt { get; set; }
 
@@ -41,5 +43,7 @@ namespace ObjectBusiness
         public CategoryPost? CategoryPost { get; set; }
         //[JsonIgnore]
         public Users? User { get; set; }
+        [JsonIgnore]
+        public ICollection<TransferRequests>? TransferRequests { get; set; }
     }
 }

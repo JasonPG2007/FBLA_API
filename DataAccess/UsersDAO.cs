@@ -38,33 +38,117 @@ namespace DataAccess
         #region All users
         public IQueryable<Users> AllUsers()
         {
-            var listUsers = db.Users.AsNoTracking();
+            var listUsers = (from s in db.Student
+                             join u in db.Users
+                             on s.UserId equals u.UserId
+                             where u.Role == Role.Student
+                             select new Users
+                             {
+                                 UserId = u.UserId,
+                                 FirstName = u.FirstName,
+                                 LastName = u.LastName,
+                                 Email = u.Email,
+                                 Role = u.Role,
+                                 Avatar = u.Avatar,
+                                 IsActive = u.IsActive,
+                                 IsAgreedToTerms = u.IsAgreedToTerms,
+                                 IsVerifiedEmail = u.IsVerifiedEmail,
+                                 CreatedAt = u.CreatedAt,
+                                 StudentId = s.StudentId
+                             })
+                             .AsNoTracking()
+                             .OrderByDescending(u => u.FirstName);
+
             return listUsers;
         }
         #endregion
 
-        #region Get User By Student Id
-        public Users GetUserByStudentId(int studentId)
+        #region Get Admin
+        public Users GetAdmin()
         {
-            var user = db.Users
+            var user = db.Users.FirstOrDefault(u => u.Role == Role.Admin);
+            return user;
+        }
+        #endregion
+
+        #region Get User By Student Id
+        public async Task<Users> GetUserByStudentId(int studentId)
+        {
+            var user = await db.Users
                          .Include(u => u.Student)
-                         .FirstOrDefault(s => s.Student.StudentId == studentId);
+                         .FirstOrDefaultAsync(s => s.Student.StudentId == studentId);
             return user;
         }
         #endregion
 
         #region Get User By Email
-        public Users GetUserByEmail(string email)
+        public async Task<Users> GetUserByEmail(string email)
         {
-            var user = db.Users.Include(s => s.Student).FirstOrDefault(s => s.Email.Equals(email));
+            var user = await db.Users.Include(s => s.Student)
+                                     .FirstOrDefaultAsync(s => s.Email.Equals(email));
+            return user;
+        }
+        #endregion
+
+        #region Search User By Email
+        public IQueryable<Users> SearchUserByEmail(string query)
+        {
+            var users = db.Users.Where(s => s.Email.Contains(query) && s.Role == Role.Student);
+            return users;
+        }
+        #endregion
+
+        #region Get User By ID
+        public async Task<Users> GetUserByID(int userId)
+        {
+            var user = await db.Users.Include(s => s.Student)
+                                     .FirstOrDefaultAsync(u => u.UserId == userId);
             return user;
         }
         #endregion
 
         #region Update user
-        public async Task<bool> UpdateUser(Users user)
+        public async Task<bool> UpdateUser()
         {
-            return false;
+            try
+            {
+                await db.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+        #endregion
+
+        #region Suspend user
+        public async Task<bool> SuspendUser()
+        {
+            try
+            {
+                await db.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+        #endregion
+
+        #region Unsuspend user
+        public async Task<bool> UnsuspendUser()
+        {
+            try
+            {
+                await db.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
         }
         #endregion
 

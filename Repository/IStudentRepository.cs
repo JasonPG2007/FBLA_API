@@ -11,5 +11,7 @@ namespace Repository
     {
         public Task<bool> SignUpStudent(Student student);
         public IQueryable<Student> AllStudents();
+        public Task<Student> GetStudentById(int studentId);
+        public Student GetStudentByUserId(int userId);
     }
 }

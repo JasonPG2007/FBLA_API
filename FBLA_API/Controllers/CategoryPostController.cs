@@ -1,6 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using ObjectBusiness;
 using Repository;
+using System.Threading.Tasks;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -26,16 +29,16 @@ namespace FBLA_API.Controllers
 
         // GET: api/<CategoryPostController>
         [HttpGet]
-        public IEnumerable<string> Get()
+        public async Task<ActionResult<List<CategoryPost>>> Get()
         {
-            return new string[] { "value1", "value2" };
+            var categories = await categoryPostRepository.AllCategoryPosts().ToListAsync();
+            return Ok(categories);
         }
 
         [HttpGet("search-category-post")]
-        public ActionResult<IQueryable<CategoryPost>> Get(string query)
+        public async Task<ActionResult<List<CategoryPost>>> Get(string query)
         {
-            var categories = categoryPostRepository.SearchCategoryPost(query);
-
+            var categories = await categoryPostRepository.SearchCategoryPost(query).ToListAsync();
             return Ok(categories);
         }
 

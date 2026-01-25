@@ -23,6 +23,10 @@ namespace ObjectBusiness
         public DbSet<CategoryPost> CategoryPost { get; set; }
         public DbSet<Match> Match { get; set; }
         public DbSet<VerificationCode> VerificationCode { get; set; }
+        public DbSet<TransferRequests> TransferRequests { get; set; }
+        public DbSet<PickUpRequest> PickUpRequest { get; set; }
+        public DbSet<Chat> Chat { get; set; }
+        public DbSet<MessageChat> MessageChat { get; set; }
         #endregion
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -37,6 +41,16 @@ namespace ObjectBusiness
                 .Property(u => u.TypePost)
                 .HasConversion<string>();
 
+            // Allow converting enum to string
+            modelBuilder.Entity<TransferRequests>()
+                .Property(u => u.Status)
+                .HasConversion<string>();
+
+            // Allow converting enum to string
+            modelBuilder.Entity<PickUpRequest>()
+                .Property(u => u.Status)
+                .HasConversion<string>();
+
             // Add admin user sample data
             modelBuilder.Entity<Users>().HasData(new Users
             {
@@ -47,7 +61,7 @@ namespace ObjectBusiness
                 CreatedAt = DateTime.Now,
                 IsActive = true,
                 IsAgreedToTerms = true,
-                Email = "admin123@gmail.com",
+                Email = "baoanwebapp@gmail.com",
                 PickImage1 = "1",
                 PickImage2 = "12",
                 Role = Role.Admin,

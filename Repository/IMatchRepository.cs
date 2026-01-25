@@ -11,5 +11,8 @@ namespace Repository
     {
         public IQueryable<Match> AllMatches();
         public Task<bool> CreateMatch(Match match);
+        public IQueryable<object> GetMatchesByUserId(int userId);
+        public Task<Match> GetMatchByPostId(int postId);
+        public Task<Match> CheckPostLostFoundMatched(int postIdLost, int postIdFound);
     }
 }

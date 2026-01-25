@@ -15,7 +15,7 @@ namespace FBLA_API.DTOs.Match
         public string Code { get; set; } // Use to print out and stick on the stuff
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public int FoundPostId { get; set; }
-        public int Score { get; set; }
-        public Users User { get; set; }
+        public double Score { get; set; }
+        public ObjectBusiness.Users User { get; set; }
     }
 }

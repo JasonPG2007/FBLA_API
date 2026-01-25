@@ -31,6 +31,7 @@ namespace ObjectBusiness
         public string PickImage2 { get; set; }
         public bool IsActive { get; set; } = true;
         public bool IsAgreedToTerms { get; set; } = false;
+        public bool IsVerifiedEmail { get; set; } = false;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public DateTime? UpdatedAt { get; set; }
 

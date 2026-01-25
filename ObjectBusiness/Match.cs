@@ -22,5 +22,7 @@ namespace ObjectBusiness
 
         // Build relationship
         public VerificationCode? VerificationCode { get; set; }
+        public Posts? LostPost { get; set; }
+        public Posts? FoundPost { get; set; }
     }
 }

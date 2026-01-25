@@ -11,8 +11,14 @@ namespace Repository
     {
         public IQueryable<Users> AllUsers();
         public Task<bool> SignUp(Users user);
+        public IQueryable<Users> SearchUserByEmail(string query);
+        public Task<bool> SuspendUser();
+        public Task<bool> UnsuspendUser();
+        public Task<Users> GetUserByID(int userId);
         public Task<Users> SignIn(int studentId, string password, string? email);
-        public Users GetUserByStudentId(int studentId);
-        public Users GetUserByEmail(string email);
+        public Task<Users> GetUserByStudentId(int studentId);
+        public Task<Users> GetUserByEmail(string email);
+        public Task<bool> UpdateUser();
+        public Users GetAdmin();
     }
 }

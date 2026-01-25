@@ -44,9 +44,17 @@ namespace DataAccess
         #endregion
 
         #region Get Verification Code By Id
-        public VerificationCode GetVerificationCodeById(int verificationCodeId)
+        public async Task<VerificationCode> GetVerificationCodeById(int verificationCodeId)
         {
-            var verificationCode = db.VerificationCode.FirstOrDefault(v => v.VerificationCodeId == verificationCodeId);
+            var verificationCode = await db.VerificationCode.FirstOrDefaultAsync(v => v.VerificationCodeId == verificationCodeId);
+            return verificationCode;
+        }
+        #endregion
+
+        #region Get Verification Code By Match Id
+        public async Task<VerificationCode> GetVerificationCodeByMatchId(int matchId)
+        {
+            var verificationCode = await db.VerificationCode.FirstOrDefaultAsync(v => v.MatchId == matchId);
             return verificationCode;
         }
         #endregion
@@ -54,7 +62,24 @@ namespace DataAccess
         #region Delete Verification Code
         public async Task<bool> DeleteVerificationCode(int verificationCodeId)
         {
-            return false;
+            var code = await GetVerificationCodeById(verificationCodeId);
+
+            if (code == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                var codeDeleted = db.VerificationCode.Remove(code);
+                await db.SaveChangesAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
         }
         #endregion
     }

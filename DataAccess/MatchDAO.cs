@@ -44,9 +44,54 @@ namespace DataAccess
         #endregion
 
         #region Get Match By Id
-        public Match GetMatchById(int matchId)
+        public async Task<Match> GetMatchById(int matchId)
         {
-            var match = db.Match.FirstOrDefault(m => m.MatchId == matchId);
+            var match = await db.Match.FirstOrDefaultAsync(m => m.MatchId == matchId);
+            return match;
+        }
+        #endregion
+
+        #region Get Matches By User Id
+        public IQueryable<object> GetMatchesByUserId(int userId)
+        {
+            var matches = db.Match.Include(m => m.LostPost)
+                                      .Include(m => m.FoundPost)
+                                      .ThenInclude(p => p.User)
+                                      .Include(m => m.VerificationCode)
+                                      .Where(m => m.LostPost.UserId == userId ||
+                                             m.FoundPost.UserId == userId)
+                                      .Select(m => new
+                                      {
+                                          MatchId = m.MatchId,
+                                          Code = m.VerificationCode.Code,
+                                          CreatedAt = m.CreatedAt,
+                                          FirstNameFound = m.FoundPost.User.FirstName,
+                                          LastNameFound = m.FoundPost.User.LastName,
+                                          FirstNameLost = m.LostPost.User.FirstName,
+                                          LastNameLost = m.LostPost.User.LastName,
+                                          UserIdLost = m.LostPost.User.UserId,
+                                          UserIdFound = m.FoundPost.User.UserId,
+                                          TitlePost = m.LostPost.Title,
+                                          PostId = m.LostPost.PostId,
+                                          IsUsed = m.VerificationCode.IsUsed
+                                      });
+            return matches;
+        }
+        #endregion
+
+        #region Get Match By Post Id
+        public async Task<Match> GetMatchByPostId(int postId)
+        {
+            var match = await db.Match.FirstOrDefaultAsync(m => m.LostPostId == postId);
+            return match;
+        }
+        #endregion
+
+        #region Check Post Lost and Found Matched
+        public async Task<Match> CheckPostLostFoundMatched(int postIdLost, int postIdFound)
+        {
+            var match = await db.Match.FirstOrDefaultAsync(m => m.LostPostId == postIdLost &&
+                                                           m.FoundPostId == postIdFound);
             return match;
         }
         #endregion
@@ -61,7 +106,24 @@ namespace DataAccess
         #region Delete match
         public async Task<bool> DeleteMatch(int matchId)
         {
-            return false;
+            var match = await GetMatchById(matchId);
+
+            if (match == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                var requestDeleted = db.Match.Remove(match);
+                await db.SaveChangesAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
         }
         #endregion
     }

@@ -34,5 +34,12 @@ namespace Repository
             return categoryPostDAO.SearchCategoryPost(query);
         }
         #endregion
+
+        #region Search Category Post
+        public CategoryPost GetCategoryPostById(int categoryId)
+        {
+            return categoryPostDAO.GetCategoryPostById(categoryId);
+        }
+        #endregion
     }
 }

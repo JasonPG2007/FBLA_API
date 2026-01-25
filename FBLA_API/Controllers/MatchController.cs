@@ -1,7 +1,13 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using FBLA_API.DTOs.Match;
+using FBLA_API.DTOs.VerificationCodes;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using ObjectBusiness;
 using Repository;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -13,22 +19,63 @@ namespace FBLA_API.Controllers
     {
         #region Variables
         private readonly IMatchRepository matchRepository;
+        private readonly IUsersRepository userRepository;
+        private readonly IPostRepository postRepository;
         private readonly IVerificationCodeRepository verificationCodeRepository;
         #endregion
 
         #region Constructor
-        public MatchController(IMatchRepository matchRepository, IVerificationCodeRepository verificationCodeRepository)
+        public MatchController(IMatchRepository matchRepository,
+                               IVerificationCodeRepository verificationCodeRepository,
+                               IPostRepository postRepository,
+                               IUsersRepository userRepository)
         {
             this.matchRepository = matchRepository;
+            this.userRepository = userRepository;
             this.verificationCodeRepository = verificationCodeRepository;
+            this.postRepository = postRepository;
         }
         #endregion
 
         // GET: api/<MatchController>
-        [HttpGet]
-        public IEnumerable<string> Get()
+        [Authorize]
+        [HttpGet("match-user")]
+        public async Task<ActionResult<List<MatchDTO>>> Get()
         {
-            return new string[] { "value1", "value2" };
+            var userEmail = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (userEmail == null)
+            {
+                return Unauthorized("User not authenticated");
+            }
+
+            var user = await userRepository.GetUserByEmail(userEmail);
+
+            if (user == null)
+            {
+                return NotFound("User not found");
+            }
+
+            var matches = await matchRepository.GetMatchesByUserId(user.UserId).ToListAsync();
+
+            return Ok(matches);
+        }
+
+        [Authorize]
+        [HttpGet("check-matched-post/{postId}")]
+        public async Task<ActionResult<Match>> CheckMatchedPost(int postId)
+        {
+            var match = await matchRepository.GetMatchByPostId(postId);
+
+            if (match == null)
+            {
+                return NotFound(new
+                {
+                    message = "This post does not have any matches"
+                });
+            }
+
+            return Ok(match);
         }
 
         // GET api/<MatchController>/5
@@ -39,6 +86,7 @@ namespace FBLA_API.Controllers
         }
 
         // POST api/<MatchController>
+        [Authorize]
         [HttpPost]
         public async Task<ActionResult> Post([FromBody] Match match)
         {

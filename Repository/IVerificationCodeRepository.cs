@@ -10,5 +10,6 @@ namespace Repository
     public interface IVerificationCodeRepository
     {
         public Task<bool> CreateVerificationCode(VerificationCode verificationCode);
+        public Task<VerificationCode> GetVerificationCodeByMatchId(int matchId);
     }
 }
