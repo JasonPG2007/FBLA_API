@@ -55,7 +55,9 @@ namespace DataAccess
         public IQueryable<CategoryPost> SearchCategoryPost(string query)
         {
             var categoryPosts = db.CategoryPost
-                                  .Where(c => c.CategoryPostName.Contains(query))
+                                  .Where(c => c.CategoryPostName.Contains(query) ||
+                                         c.CategoryPostName == "Other")
+                                  .OrderBy(c => c.CategoryPostName)
                                   .AsNoTracking();
             return categoryPosts;
         }

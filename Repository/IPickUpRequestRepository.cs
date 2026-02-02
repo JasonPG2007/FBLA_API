@@ -11,6 +11,7 @@ namespace Repository
     {
         public Task<bool> CreateRequest(PickUpRequest request);
         public Task<PickUpRequest> CheckContainsPost(int postId);
+        public IQueryable<PickUpRequest> SearchRequest(string query);
         public IQueryable<PickUpRequest> AllRequests();
         public Task<PickUpRequest> AcceptTime(int requestId);
         public Task<PickUpRequest> AcceptTimeRescheduled(int requestId);

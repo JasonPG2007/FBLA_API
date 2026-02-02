@@ -27,6 +27,7 @@ namespace ObjectBusiness
         public DbSet<PickUpRequest> PickUpRequest { get; set; }
         public DbSet<Chat> Chat { get; set; }
         public DbSet<MessageChat> MessageChat { get; set; }
+        public DbSet<Notifications> Notifications { get; set; }
         #endregion
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -49,6 +50,11 @@ namespace ObjectBusiness
             // Allow converting enum to string
             modelBuilder.Entity<PickUpRequest>()
                 .Property(u => u.Status)
+                .HasConversion<string>();
+
+            // Allow converting enum to string
+            modelBuilder.Entity<Notifications>()
+                .Property(u => u.NotificationType)
                 .HasConversion<string>();
 
             // Add admin user sample data

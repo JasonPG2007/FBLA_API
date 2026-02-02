@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using FBLA_API.DTOs.Users;
 using Microsoft.Extensions.Hosting;
+using FBLA_API.DTOs.Posts;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -65,6 +66,7 @@ namespace FBLA_API.Controllers
                 TypePost = p.TypePost,
                 Vector = p.Vector,
                 Code = p.Code,
+                IsReceived = p.IsReceived,
                 UrlImage = p.UrlImage = $"{Request.Scheme}://{Request.Host}/Uploads/{p.Image}",
                 User = new Users
                 {
@@ -212,6 +214,32 @@ namespace FBLA_API.Controllers
         }
         #endregion
 
+        #region My Posts
+        [Authorize(Roles = "Admin")]
+        [HttpGet("user-posts/{userId}")]
+        public async Task<ActionResult<List<Posts>>> GetAllPostsByUserId(int userId)
+        {
+            var user = await userRepository.GetUserByID(userId);
+
+            if (user == null)
+            {
+                return NotFound("User not found");
+            }
+
+            var posts = await postRepository.AllPostsByUserId(userId).ToListAsync();
+
+            foreach (var post in posts)
+            {
+                if (!string.IsNullOrEmpty(post.Image))
+                {
+                    post.UrlImage = $"{Request.Scheme}://{Request.Host}/Uploads/{post.Image}";
+                }
+            }
+
+            return Ok(posts);
+        }
+        #endregion
+
         #region Get Lost Posts Per Month
         [Authorize(Roles = "Admin")]
         [HttpGet("lost-posts-per-month")]
@@ -325,6 +353,7 @@ namespace FBLA_API.Controllers
                 TypePost = p.TypePost,
                 Vector = p.Vector,
                 Code = p.Code,
+                IsReceived = p.IsReceived,
                 UrlImage = p.UrlImage = $"{Request.Scheme}://{Request.Host}/Uploads/{p.Image}",
                 User = new Users
                 {
@@ -341,6 +370,7 @@ namespace FBLA_API.Controllers
         }
         #endregion
 
+        #region Get Post By Id
         // GET api/<PostController>/5
         [HttpGet("{postId}")]
         public async Task<ActionResult<Posts>> Get(int postId)
@@ -359,11 +389,14 @@ namespace FBLA_API.Controllers
                 FirstName = post.User.FirstName,
                 LastName = post.User.LastName,
                 Email = post.User.Email,
+                Avatar = post.User.Avatar,
                 UrlAvatar = $"{Request.Scheme}://{Request.Host}/Uploads/{post.User.Avatar}"
             };
             return Ok(post);
         }
+        #endregion
 
+        #region Create Post
         // POST api/<PostController>
         [Authorize]
         [HttpPost]
@@ -401,29 +434,31 @@ namespace FBLA_API.Controllers
                 post.Image = await UploadFiles(post.ImageUpload);
             }
 
-            if (post.TypePost == TypePost.Found)
+            var isAdded = await postRepository.CreatePost(post);
+
+            if (isAdded)
             {
-                var isAdded = await postRepository.CreatePost(post);
-                if (isAdded)
-                {
-                    return Ok("Create post successfully");
-                }
+                return Ok("Created post successfully");
             }
-            else
-            {
-                var isAdded = await postRepository.CreatePost(post);
-                if (isAdded)
-                {
-                    return Ok("Create post successfully");
-                }
-            }
+
             return BadRequest("Create post failed");
         }
+        #endregion
 
+        #region Mark Received
         [Authorize]
         [HttpPost("mark-received/{postId}")]
         public async Task<ActionResult> MarkReceived(int postId)
         {
+            var checkPostMarked = await postRepository.GetPostById(postId);
+            if (checkPostMarked != null && checkPostMarked.IsReceived == true)
+            {
+                return Ok(new
+                {
+                    message = "Your lost post is already marked"
+                });
+            }
+
             var postMarked = await postRepository.MarkReceived(postId);
             if (postMarked == null)
             {
@@ -435,7 +470,9 @@ namespace FBLA_API.Controllers
                 message = "Marked successfully"
             });
         }
+        #endregion
 
+        #region Search Code Lost for Admin
         [Authorize(Roles = "Admin")]
         [HttpGet("search-codes")]
         public async Task<ActionResult<List<Posts>>> SearchCodes([FromQuery] string query)
@@ -443,7 +480,9 @@ namespace FBLA_API.Controllers
             var posts = await postRepository.SearchCodes(query).ToListAsync();
             return Ok(posts);
         }
+        #endregion
 
+        #region Regular Search
         [HttpGet("regular-search")]
         public async Task<ActionResult<List<Posts>>> RegularSearch([FromQuery] string? status,
                                                       [FromQuery] int? categoryId,
@@ -475,7 +514,9 @@ namespace FBLA_API.Controllers
 
             return Ok(results);
         }
+        #endregion
 
+        #region Search Image Similarity
         // POST Search Image Similarity api/<PostController>
         [HttpPost("search-image-similarity")]
         public ActionResult<List<SearchResult>> SearchImageSimilarity([FromBody] List<double> vector)
@@ -498,18 +539,74 @@ namespace FBLA_API.Controllers
 
             return Ok(post);
         }
+        #endregion
 
+        #region Update Post
         // PUT api/<PostController>/5
+        [Authorize]
         [HttpPut("{id}")]
-        public void Put(int id, [FromBody] string value)
+        public async Task<ActionResult<bool>> Put(int id, [FromForm] PostDTO postDTO)
         {
-        }
+            var post = await postRepository.GetPostById(id);
 
-        // DELETE api/<PostController>/5
-        [HttpDelete("{id}")]
-        public void Delete(int id)
-        {
+            if (post == null)
+            {
+                return NotFound(new
+                {
+                    Message = "Post does not found"
+                });
+            }
+
+            post.CategoryPostId = postDTO.CategoryPostId;
+            post.Title = postDTO.Title;
+            post.Description = postDTO.Description;
+            post.UpdatedAt = DateTime.Now;
+            post.Vector = postDTO.Vector;
+
+            if (postDTO.ImageUpload != null)
+            {
+                post.Image = await UploadFiles(postDTO.ImageUpload);
+            }
+
+            var isUpdated = await postRepository.UpdatePost(post);
+
+            if (!isUpdated)
+            {
+                return BadRequest(new
+                {
+                    Message = "Update post failed"
+                });
+            }
+
+            return Ok(new
+            {
+                Message = "Updated post successfully"
+            });
         }
+        #endregion
+
+        #region Delete Post for Admin
+        // DELETE api/<PostController>/5
+        [Authorize(Roles = "Admin")]
+        [HttpDelete("{postId}")]
+        public async Task<ActionResult<bool>> Delete(int postId)
+        {
+            var isDeleted = await postRepository.DeletePost(postId);
+
+            if (!isDeleted)
+            {
+                return BadRequest(new
+                {
+                    Message = "Delete post failed"
+                });
+            }
+
+            return Ok(new
+            {
+                Message = "Deleted post successfully"
+            });
+        }
+        #endregion
 
         // Funtion not related to Entity
         #region Function calculation similarity

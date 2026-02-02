@@ -90,6 +90,33 @@ namespace FBLA_API.Controllers
         [HttpPost]
         public async Task<ActionResult> Post([FromBody] Match match)
         {
+            var userEmail = User.FindFirst(ClaimTypes.NameIdentifier)?.Value; // User email currently signed in
+
+            if (userEmail == null)
+            {
+                return Unauthorized(new
+                {
+                    Message = "User unauthorized"
+                });
+            }
+
+            var user = await userRepository.GetUserByEmail(userEmail);
+
+            // Check user if existed
+            if (user == null)
+            {
+                return NotFound(new
+                {
+                    Message = "User does not found"
+                });
+            }
+
+            // Check user if verified email
+            if (!user.IsVerifiedEmail)
+            {
+                return Forbid();
+            }
+
             var postExists = matchRepository.AllMatches().Any(m => m.LostPostId == match.LostPostId);
             if (postExists)
             {

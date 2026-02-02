@@ -73,7 +73,9 @@ builder.Services.AddAuthentication(options =>
 });
 
 // Add SignalR
-builder.Services.AddSignalR().AddJsonProtocol(options =>
+builder.Services.AddSignalR()
+       .AddAzureSignalR() // Use azure signalR service
+       .AddJsonProtocol(options =>
 {
     options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()); // To handle enum serialization
 });
@@ -93,6 +95,7 @@ builder.Services.AddScoped<PickUpRequestDAO>();
 builder.Services.AddScoped<VerificationCodeDAO>();
 builder.Services.AddScoped<TransferRequestDAO>();
 builder.Services.AddScoped<ChatDAO>();
+builder.Services.AddScoped<NotificationsDAO>();
 builder.Services.AddScoped<MessageChatDAO>();
 builder.Services.AddScoped<IUsersRepository, UsersRepository>();
 builder.Services.AddScoped<IStudentRepository, StudentRepository>();
@@ -104,6 +107,10 @@ builder.Services.AddScoped<ITransferRequestRepository, TransferRequestRepository
 builder.Services.AddScoped<IPickUpRequestRepository, PickUpRequestRepository>();
 builder.Services.AddScoped<IChatRepository, ChatRepository>();
 builder.Services.AddScoped<IMessageChatRepository, MessageChatRepository>();
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+
+// Register BackgroundService
+builder.Services.AddHostedService<HolderReminderService>();
 
 // Connect to SQL Server
 builder.Services.AddDbContext<FBLADbContext>(options =>

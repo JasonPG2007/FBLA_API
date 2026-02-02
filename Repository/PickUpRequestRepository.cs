@@ -670,6 +670,13 @@ namespace Repository
         }
         #endregion
 
+        #region Search Request
+        public IQueryable<PickUpRequest> SearchRequest(string query)
+        {
+            return pickUpRequestDAO.SearchRequest(query);
+        }
+        #endregion
+
         #region Delete Pick Up Request
         public async Task<bool> DeletePickUpRequest(int postId)
         {

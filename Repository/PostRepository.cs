@@ -22,6 +22,9 @@ namespace Repository
         private readonly MatchDAO matchDAO;
         private readonly UsersDAO userDAO;
         private readonly PickUpRequestDAO pickUpRequestDAO;
+        private readonly ChatDAO chatDAO;
+        private readonly NotificationsDAO notificationsDAO;
+        private readonly TransferRequestDAO transferRequestDAO;
         private readonly VerificationCodeDAO verificationCodeDAO;
         private readonly EmailSender emailSender;
         private readonly IHubContext<SystemHub> hubContext;
@@ -34,15 +37,21 @@ namespace Repository
                               UsersDAO userDAO,
                               EmailSender emailSender,
                               PickUpRequestDAO pickUpRequestDAO,
-                              VerificationCodeDAO verificationCodeDAO)
+                              VerificationCodeDAO verificationCodeDAO,
+                              NotificationsDAO notificationsDAO,
+                              ChatDAO chatDAO,
+                              TransferRequestDAO transferRequestDAO)
         {
             this.postDAO = postDAO;
+            this.transferRequestDAO = transferRequestDAO;
+            this.chatDAO = chatDAO;
             this.matchDAO = matchDAO;
             this.hubContext = hubContext;
             this.userDAO = userDAO;
             this.emailSender = emailSender;
             this.pickUpRequestDAO = pickUpRequestDAO;
             this.verificationCodeDAO = verificationCodeDAO;
+            this.notificationsDAO = notificationsDAO;
         }
         #endregion
 
@@ -144,6 +153,340 @@ namespace Repository
         }
         #endregion
 
+        #region Update post
+        public async Task<bool> UpdatePost(Posts post)
+        {
+            var isUpdated = await postDAO.UpdatePost();
+
+            // Send suggestions notification for lost posts, which similar to found
+            if (isUpdated && post.TypePost == TypePost.Found && post.Vector != null)
+            {
+                // All posts
+                var posts = await postDAO.GetLostPosts().ToListAsync();
+
+                // Check description
+                foreach (var lostPost in posts)
+                {
+                    if (!string.IsNullOrEmpty(lostPost.Description) && !string.IsNullOrEmpty(post.Description))
+                    {
+                        var score = CalculateSimilarity(lostPost.Description, post.Description);
+                        if (score >= 65) // If have 3 or more common words
+                        {
+                            var postUser = await userDAO.GetUserByID(lostPost.UserId);
+                            if (postUser != null)
+                            {
+                                string senderName = "Back2Me";
+                                string senderEmail = "baoandng07@gmail.com";
+                                string toName = postUser.FirstName + " " + postUser.LastName;
+                                string toEmail = postUser.Email;
+                                string subject = "🔔 Potential Match for Your Lost Item!";
+                                string content = $@"
+                                    <html>
+                                    <head>
+                                      <style>
+                                        body {{
+                                            font-family: 'Segoe UI', Arial, sans-serif;
+                                            line-height: 1.6;
+                                            color: #072138;
+                                            background-color: #f9f9fb;
+                                            padding: 20px;
+                                        }}
+                                        a {{
+                                            text-decoration: none !important;
+                                        }}
+                                        .container {{
+                                            max-width: 600px;
+                                            margin: auto;
+                                            background: #ffffff;
+                                            border-radius: 12px;
+                                            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                                            overflow: hidden;
+                                        }}
+                                        .header {{
+                                            background-color: #ec7207;
+                                            color: #fff;
+                                            padding: 20px;
+                                            text-align: center;
+                                        }}
+                                        .header h2 {{
+                                            margin: 0;
+                                            font-size: 22px;
+                                        }}
+                                        .content {{
+                                            padding: 20px;
+                                        }}
+                                        .content p {{
+                                            margin: 10px 0;
+                                        }}
+                                        .details {{
+                                            width: 100%;
+                                            border-collapse: collapse;
+                                            margin: 15px 0;
+                                        }}
+                                        .details th, .details td {{
+                                            border: 1px solid #ddd;
+                                            padding: 10px;
+                                        }}
+                                        .details th {{
+                                            background-color: #fdcc4b;
+                                            text-align: left;
+                                            color: #072138;
+                                        }}
+                                        .highlight {{
+                                            background: #fffae6;
+                                            border-left: 4px solid #ff9900;
+                                            padding: 10px 15px;
+                                            margin: 15px 0;
+                                            border-radius: 6px;
+                                        }}
+                                        .btn {{
+                                            display: inline-block;
+                                            background-color: #ec7207;
+                                            border: none;
+                                            color: #fff !important;
+                                            font-weight: 600;
+                                            cursor: pointer;
+                                            font-size: 16px;
+                                            padding: 12px 25px;
+                                            border-radius: 20px;
+                                            margin-top: 15px;
+                                            transition: all 0.3s ease-in-out;
+                                        }}
+                                        .btn:hover {{
+                                            transform: scale(1.05);
+                                        }}
+                                        .footer {{
+                                            background: #f4f6f9;
+                                            padding: 15px;
+                                            text-align: center;
+                                            font-size: 0.9em;
+                                            color: #666;
+                                        }}
+                                      </style>
+                                    </head>
+                                    <body>
+                                      <div class='container'>
+                                        <div class='header'>
+                                          <h2>🔔 Potential Match Found!</h2>
+                                        </div>
+                                        <div class='content'>
+                                          <p>Hi <strong>{postUser.FirstName} {postUser.LastName}</strong>,</p>
+                                          <p>We found a new <strong>Found Item</strong> that might match one of your lost items.</p>
+
+                                          <table class='details'>
+                                            <tr>
+                                              <th>Title</th>
+                                              <td>{post.Title}</td>
+                                            </tr>
+                                            <tr>
+                                              <th>Posted By</th>
+                                              <td>{postUser.FirstName} {postUser.LastName}</td>
+                                            </tr>
+                                            <tr>
+                                              <th>Posted On</th>
+                                              <td>{post.CreatedAt:MMMM dd, yyyy}</td>
+                                            </tr>
+                                          </table>
+
+                                          <div class='highlight'>
+                                            ⚡ Tip: Click the button below to check if this item is yours.
+                                          </div>
+
+                                          <p style='text-align: center;'>
+                                             <a href='https://back2me.vercel.app/detail-post/{post.PostId}' class='btn'>🔎 View Item</a>
+                                          </p>
+
+                                          <p>We recommend checking as soon as possible to reclaim your lost item.</p>
+                                        </div>
+                                        <div class='footer'>
+                                          <p>Thanks for using <strong>Back2me</strong>!<br/>Your lost items are our priority.</p>
+                                        </div>
+                                      </div>
+                                    </body>
+                                    </html>
+                                    ";
+
+                                await emailSender.SendEmail(senderName, senderEmail, toName, toEmail, subject, content);
+
+                                // Add notification
+                                var notification = new Notifications
+                                {
+                                    PostOriginalId = lostPost.PostId,
+                                    NotificationContent = $"A new found item titled '{post.Title}' might match your lost item. Click to view details.",
+                                    NotificationType = NotificationType.MatchDescription,
+                                    PostMatchedId = post.PostId,
+                                    IsRead = false,
+                                    CreatedAt = DateTime.Now
+                                };
+                                await notificationsDAO.CreateNotification(notification);
+                            }
+                        }
+                    }
+                }
+
+                // Check image if found post has image
+                var vector = System.Text.Json.JsonSerializer.Deserialize<List<double>>(post.Vector!);
+                var postSearchWithImage = postDAO.SearchImageSimilarityForLost(vector!).ToList();
+
+                foreach (var postWithImage in postSearchWithImage)
+                {
+                    var postUser = await userDAO.GetUserByID(postWithImage.Post.UserId);
+
+                    string senderName = "Back2Me";
+                    string senderEmail = "baoandng07@gmail.com";
+                    string toName = postWithImage.Post.User?.FirstName + " " + postWithImage.Post.User?.LastName;
+                    string toEmail = postWithImage.Post.User?.Email;
+                    string subject = "📸 Potential Match Found for Your Lost Item!";
+                    string content = $@"
+                        <html>
+                        <head>
+                          <style>
+                            body {{
+                                font-family: 'Segoe UI', Arial, sans-serif;
+                                line-height: 1.6;
+                                color: #072138;
+                                background-color: #f9f9fb;
+                                padding: 20px;
+                            }}
+                            a {{
+                                text-decoration: none !important;
+                            }}
+                            .container {{
+                                max-width: 600px;
+                                margin: auto;
+                                background: #ffffff;
+                                border-radius: 12px;
+                                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                                overflow: hidden;
+                            }}
+                            .header {{
+                                background-color: #ec7207;
+                                color: #fff;
+                                padding: 20px;
+                                text-align: center;
+                            }}
+                            .header h2 {{
+                                margin: 0;
+                                font-size: 22px;
+                            }}
+                            .content {{
+                                padding: 20px;
+                            }}
+                            .content p {{
+                                margin: 10px 0;
+                            }}
+                            .details {{
+                                width: 100%;
+                                border-collapse: collapse;
+                                margin: 15px 0;
+                            }}
+                            .details th, .details td {{
+                                border: 1px solid #ddd;
+                                padding: 10px;
+                            }}
+                            .details th {{
+                                background-color: #fdcc4b;
+                                text-align: left;
+                                color: #072138;
+                            }}
+                            .highlight {{
+                                background: #fffae6;
+                                border-left: 4px solid #ff9900;
+                                padding: 10px 15px;
+                                margin: 15px 0;
+                                border-radius: 6px;
+                            }}
+                            .btn {{
+                                display: inline-block;
+                                background-color: #ec7207;
+                                border: none;
+                                color: #fff !important;
+                                font-weight: 600;
+                                cursor: pointer;
+                                font-size: 16px;
+                                padding: 12px 25px;
+                                border-radius: 20px;
+                                margin-top: 15px;
+                                transition: all 0.3s ease-in-out;
+                            }}
+                            .btn:hover {{
+                                transform: scale(1.05);
+                            }}
+                            .footer {{
+                                background: #f4f6f9;
+                                padding: 15px;
+                                text-align: center;
+                                font-size: 0.9em;
+                                color: #666;
+                            }}
+                          </style>
+                        </head>
+                        <body>
+                          <div class='container'>
+                            <div class='header'>
+                              <h2>📸 Potential Image Match!</h2>
+                            </div>
+                            <div class='content'>
+                              <p>Hi <strong>{postWithImage.Post.User?.FirstName} {postWithImage.Post.User?.LastName}</strong>,</p>
+                              <p>We detected a new <strong>Found Item</strong> that has a <strong>similar image</strong> to one of your lost items.</p>
+
+                              <table class='details'>
+                                <tr>
+                                  <th>Title</th>
+                                  <td>{post.Title}</td>
+                                </tr>
+                                <tr>
+                                  <th>Posted By</th>
+                                  <td>{postUser.FirstName} {postUser.LastName}</td>
+                                </tr>
+                                <tr>
+                                  <th>Posted On</th>
+                                  <td>{post.CreatedAt:MMMM dd, yyyy}</td>
+                                </tr>
+                                <tr>
+                                  <th>Similarity Score</th>
+                                  <td>{Math.Floor(postWithImage.Score * 1000) / 10}%</td>
+                                </tr>
+                              </table>
+
+                              <div class='highlight'>
+                                ⚡ Tip: Click the button below to view the found item and check if it matches your lost item.
+                              </div>
+
+                              <p style='text-align: center;'>
+                                 <a href='https://back2me.vercel.app/detail-post/{post.PostId}' class='btn'>🔎 View Found Item</a>
+                              </p>
+
+                              <p>Act quickly to reclaim your lost item before someone else does!</p>
+                            </div>
+                            <div class='footer'>
+                              <p>Thanks for using <strong>Back2me</strong>!<br/>We prioritize helping you recover your lost items.</p>
+                            </div>
+                          </div>
+                        </body>
+                        </html>
+                        ";
+
+                    await emailSender.SendEmail(senderName, senderEmail, toName, toEmail, subject, content);
+
+                    // Add notification
+                    var notification = new Notifications
+                    {
+                        PostOriginalId = postWithImage.Post.PostId, // Lost
+                        NotificationContent = $"A new found item titled '{post.Title}' might match your lost item. Click to view details.",
+                        NotificationType = NotificationType.MatchImage,
+                        PostMatchedId = post.PostId, // Found
+                        IsRead = false,
+                        CreatedAt = DateTime.Now
+                    };
+                    await notificationsDAO.CreateNotification(notification);
+                }
+            }
+
+            return isUpdated;
+        }
+        #endregion
+
         #region Mark Received
         public async Task<Posts> MarkReceived(int postId)
         {
@@ -152,27 +495,29 @@ namespace Repository
             if (postMarked != null)
             {
                 var match = await matchDAO.GetMatchByPostId(postMarked.PostId);
-                var foundPost = await postDAO.GetFoundPosts().FirstOrDefaultAsync(f => f.PostId == match.FoundPostId);
-
-                if (foundPost != null)
-                {
-                    var postFoundMarked = await postDAO.MarkReceived(foundPost.PostId);
-                }
 
                 // Remove pick up request of the lost post
                 var pickUpRequest = await pickUpRequestDAO.DeletePickUpRequest(postMarked.PostId);
 
-                // Remove verification code
-                var verificationCode = await verificationCodeDAO.GetVerificationCodeByMatchId(match.MatchId);
-                if (verificationCode != null)
-                {
-                    var isDeleted = await verificationCodeDAO.DeleteVerificationCode(verificationCode.VerificationCodeId);
-                }
-
                 // Remove match
                 if (match != null)
                 {
-                    var isDeleted = await matchDAO.DeleteMatch(match.MatchId);
+                    // Remove verification code
+                    var verificationCode = await verificationCodeDAO.GetVerificationCodeByMatchId(match.MatchId);
+                    if (verificationCode != null)
+                    {
+                        await verificationCodeDAO.DeleteVerificationCode(verificationCode.VerificationCodeId);
+                    }
+
+                    // Mark found post as received
+                    var foundPost = await postDAO.GetPostById(match.FoundPostId);
+
+                    if (foundPost != null)
+                    {
+                        var postFoundMarked = await postDAO.MarkReceived(foundPost.PostId);
+                    }
+
+                    await matchDAO.DeleteMatch(match.MatchId); // Delete Match
                 }
 
                 // Send realtime
@@ -231,8 +576,8 @@ namespace Repository
                         });
                     }
 
-                    // Send suggestions notification for lost post, which similar to found
-                    if (post.TypePost == TypePost.Found)
+                    // Send suggestions notification for lost posts, which similar to found
+                    if (post.TypePost == TypePost.Found && post.Vector != null)
                     {
                         // All posts
                         var posts = await postDAO.GetLostPosts().ToListAsync();
@@ -348,7 +693,7 @@ namespace Repository
 
                                               <table class='details'>
                                                 <tr>
-                                                  <th>Item Name</th>
+                                                  <th>Title</th>
                                                   <td>{post.Title}</td>
                                                 </tr>
                                                 <tr>
@@ -380,15 +725,24 @@ namespace Repository
                                         ";
 
                                         await emailSender.SendEmail(senderName, senderEmail, toName, toEmail, subject, content);
+
+                                        // Add notification
+                                        var notification = new Notifications
+                                        {
+                                            PostOriginalId = lostPost.PostId,
+                                            NotificationContent = $"A new found item titled '{post.Title}' might match your lost item. Click to view details.",
+                                            NotificationType = NotificationType.MatchDescription,
+                                            PostMatchedId = post.PostId,
+                                            IsRead = false,
+                                            CreatedAt = DateTime.Now
+                                        };
+                                        await notificationsDAO.CreateNotification(notification);
                                     }
                                 }
                             }
                         }
-                    }
 
-                    // If found post has image
-                    if (post.Vector != null)
-                    {
+                        // Check image if found post has image
                         var vector = System.Text.Json.JsonSerializer.Deserialize<List<double>>(post.Vector!);
                         var postSearchWithImage = postDAO.SearchImageSimilarityForLost(vector!).ToList();
 
@@ -496,7 +850,7 @@ namespace Repository
 
                                   <table class='details'>
                                     <tr>
-                                      <th>Item Name</th>
+                                      <th>Title</th>
                                       <td>{post.Title}</td>
                                     </tr>
                                     <tr>
@@ -509,7 +863,7 @@ namespace Repository
                                     </tr>
                                     <tr>
                                       <th>Similarity Score</th>
-                                      <td>{postWithImage.Score}%</td>
+                                      <td>{Math.Floor(postWithImage.Score * 1000) / 10}%</td>
                                     </tr>
                                   </table>
 
@@ -532,6 +886,18 @@ namespace Repository
                             ";
 
                             await emailSender.SendEmail(senderName, senderEmail, toName, toEmail, subject, content);
+
+                            // Add notification
+                            var notification = new Notifications
+                            {
+                                PostOriginalId = postWithImage.Post.PostId, // Lost
+                                NotificationContent = $"A new found item titled '{post.Title}' might match your lost item. Click to view details.",
+                                NotificationType = NotificationType.MatchImage,
+                                PostMatchedId = post.PostId, // Found
+                                IsRead = false,
+                                CreatedAt = DateTime.Now
+                            };
+                            await notificationsDAO.CreateNotification(notification);
                         }
                     }
                 }
@@ -645,7 +1011,7 @@ namespace Repository
 
                                   <table class='details'>
                                     <tr>
-                                      <th>Item Name</th>
+                                      <th>Title</th>
                                       <td>{post.Title}</td>
                                     </tr>
                                     <tr>
@@ -706,6 +1072,81 @@ namespace Repository
             }
 
             return isHandedOver;
+        }
+        #endregion
+
+        #region Delete post
+        public async Task<bool> DeletePost(int postId)
+        {
+            try
+            {
+                var match = await matchDAO.GetMatchByPostId(postId);
+
+                // Remove pick up request of the lost post
+                var pickUpRequest = await pickUpRequestDAO.DeletePickUpRequest(postId);
+
+                // Remove match
+                if (match != null)
+                {
+                    // Remove verification code
+                    var verificationCode = await verificationCodeDAO.GetVerificationCodeByMatchId(match.MatchId);
+                    if (verificationCode != null)
+                    {
+                        await verificationCodeDAO.DeleteVerificationCode(verificationCode.VerificationCodeId);
+                    }
+
+                    // Mark found post as received
+                    var foundPost = await postDAO.GetPostById(match.FoundPostId);
+
+                    if (foundPost != null)
+                    {
+                        var postFoundMarked = await postDAO.MarkReceived(foundPost.PostId);
+                    }
+
+                    await matchDAO.DeleteMatch(match.MatchId); // Delete Match
+                }
+
+                // Remove all transfer requests
+                var transferRequests = await transferRequestDAO.AllRequestsByPostId(postId);
+                if (transferRequests != null || transferRequests.Any())
+                {
+                    await transferRequestDAO.DeleteTransfers(transferRequests);
+                }
+
+                // Remove all notifications
+                var notifications = await notificationsDAO.AllNotificationsByPostId(postId);
+                if (notifications != null || notifications.Any())
+                {
+                    await notificationsDAO.DeleteNotifications(notifications);
+                }
+
+                // Remove chat has post
+                var chats = await chatDAO.AllChatsByPostId(postId);
+
+                if (chats != null || chats.Any())
+                {
+                    foreach (var chatItem in chats)
+                    {
+                        // Remove messages
+                        var messages = await chatDAO.AllMessagesByChatId(chatItem.ChatId);
+
+                        if (messages != null)
+                        {
+                            await chatDAO.DeleteMessages(messages);
+                        }
+                    }
+
+                    // Delete chat
+                    await chatDAO.DeleteChats(chats);
+                }
+
+                var isDeletedPost = await postDAO.DeletePost(postId);
+                return isDeletedPost;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
         }
         #endregion
 

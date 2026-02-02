@@ -44,7 +44,7 @@ namespace DataAccess
         #endregion
 
         #region All Chats by user ID
-        public async Task<List<Chat>> AllChatsByUserId(int userId)
+        public async Task<List<Chat>> AllChatsByUserId(int postId)
         {
             var result = await (from c in db.Chat
                                 join m in db.MessageChat
@@ -53,10 +53,10 @@ namespace DataAccess
                                 on c.UserAId equals ua.UserId
                                 join ub in db.Users
                                 on c.UserBId equals ub.UserId
-                                where c.UserAId == userId || c.UserBId == userId
+                                where c.UserAId == postId || c.UserBId == postId
                                 group new { c, m, ua, ub } by c.ChatId into g // Group because 1 chat can have messages
                                 select g
-                                    .OrderByDescending(x => x.m.CreatedAt) // order by one newest message from any chat
+                                    .OrderByDescending(x => x.m.CreatedAt) // order by one newest message from each chat
                                     .Select(x => new Chat
                                     {
                                         ChatId = x.c.ChatId,
@@ -75,6 +75,14 @@ namespace DataAccess
                                     .FirstOrDefault())
                                     .AsNoTracking()
                                     .ToListAsync();
+            return result;
+        }
+        #endregion
+
+        #region All Chats by post ID
+        public async Task<List<Chat>> AllChatsByPostId(int postId)
+        {
+            var result = await db.Chat.Where(c => c.PostId == postId).ToListAsync();
             return result;
         }
         #endregion
@@ -120,6 +128,59 @@ namespace DataAccess
             var chat = await db.Chat
                          .FirstOrDefaultAsync(c => c.ChatId == chatId);
             return chat;
+        }
+        #endregion
+
+        #region Get Chat By Post Id
+        public async Task<Chat> GetChatByPostId(int postId)
+        {
+            var chat = await db.Chat
+                         .FirstOrDefaultAsync(c => c.PostId == postId);
+            return chat;
+        }
+        #endregion
+
+        #region Delete All Messages Of Post
+        public async Task<bool> DeleteMessages(List<MessageChat> messages)
+        {
+            if (!messages.Any())
+            {
+                return false;
+            }
+
+            try
+            {
+                db.MessageChat.RemoveRange(messages);
+                await db.SaveChangesAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+        #endregion
+
+        #region Delete All Chat Of Post
+        public async Task<bool> DeleteChats(List<Chat> chats)
+        {
+            if (chats == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                db.Chat.RemoveRange(chats);
+                await db.SaveChangesAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
         }
         #endregion
 

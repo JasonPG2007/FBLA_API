@@ -87,6 +87,23 @@ namespace FBLA_API.Controllers
         public async Task<ActionResult<List<Users>>> SearchEmail([FromQuery] string query)
         {
             var users = await usersRepository.SearchUserByEmail(query).ToListAsync();
+
+            var results = users.Select(user => new
+            {
+                user.UserId,
+                user.FirstName,
+                user.LastName,
+                user.Email,
+                user.Role,
+                user.Avatar,
+                UrlAvatar = user.UrlAvatar = $"{Request.Scheme}://{Request.Host}/Uploads/{user.Avatar}",
+                user.IsActive,
+                user.IsAgreedToTerms,
+                user.IsVerifiedEmail,
+                user.CreatedAt,
+                user.StudentId
+            });
+
             return Ok(users);
         }
         #endregion
@@ -349,6 +366,7 @@ namespace FBLA_API.Controllers
                         //    SameSite = SameSiteMode.None,
                         //    Expires = tokenExpiryTimeStamp
                         //});
+
                         return Ok(new
                         {
                             Message = "Signed up successfully",
@@ -374,7 +392,7 @@ namespace FBLA_API.Controllers
             {
                 var user = await usersRepository.SignIn(signInRequestDTO.StudentId, signInRequestDTO.Password, signInRequestDTO.Email);
 
-                if (!user.IsActive)
+                if (user != null && !user.IsActive)
                 {
                     return Forbid();
                 }
@@ -487,7 +505,7 @@ namespace FBLA_API.Controllers
 
         #region Verify Email
         [HttpGet("verify-email")]
-        public async Task<ActionResult> VerifyEmail([FromQuery] string token)
+        public async Task<ActionResult> VerifyEmail([FromQuery] string token, [FromQuery] bool isForgotPassword)
         {
             try
             {
@@ -500,18 +518,22 @@ namespace FBLA_API.Controllers
                 }
 
                 var user = await usersRepository.GetUserByEmail(userEmail);
-                user.IsVerifiedEmail = true;
-                var isUpdated = await usersRepository.UpdateUser();
 
-                if (isUpdated)
+                // Seperate send email is verified and don't send for forgot password
+                if (!isForgotPassword)
                 {
-                    // Send email email has been verified
-                    string senderName = "Back2Me";
-                    string senderEmail = "baoandng07@gmail.com";
-                    string toName = user.FirstName + " " + user.LastName;
-                    string toEmail = user.Email;
-                    string subject = "✅ Your Email Has Been Verified!";
-                    string content = $@"
+                    user.IsVerifiedEmail = true;
+                    var isUpdated = await usersRepository.UpdateUser();
+
+                    if (isUpdated)
+                    {
+                        // Send email email has been verified
+                        string senderName = "Back2Me";
+                        string senderEmail = "baoandng07@gmail.com";
+                        string toName = user.FirstName + " " + user.LastName;
+                        string toEmail = user.Email;
+                        string subject = "✅ Your Email Has Been Verified!";
+                        string content = $@"
                         <html>
                         <head>
                           <style>
@@ -612,10 +634,18 @@ namespace FBLA_API.Controllers
                         </html>
                         ";
 
-                    await emailSender.SendEmail(senderName, senderEmail, toName, toEmail, subject, content);
+                        await emailSender.SendEmail(senderName, senderEmail, toName, toEmail, subject, content);
+                    }
                 }
 
-                return Ok("Verified email successfully");
+                // Remove cache
+                memoryCache.Remove($"EMAIL_VERIFY_{token}");
+
+                return Ok(new
+                {
+                    Message = "Verified email successfully",
+                    Email = user.Email
+                });
             }
             catch (Exception ex)
             {
@@ -675,7 +705,6 @@ namespace FBLA_API.Controllers
             memoryCache.Set($"EMAIL_VERIFY_{token}", user.Email, TimeSpan.FromMinutes(15));
 
             // Send verification email
-            // Send email verify
             string senderName = "Back2Me";
             string senderEmail = "baoandng07@gmail.com";
             string toName = user.FirstName + " " + user.LastName;
@@ -848,6 +877,422 @@ namespace FBLA_API.Controllers
             }
 
             return Ok("Updated successfully");
+        }
+        #endregion
+
+        #region Check email reset password
+        [HttpGet("check-email-reset-password/{email}")]
+        public async Task<ActionResult> CheckEmailForResetPassword(string email)
+        {
+            // Check user if it exists
+            var user = await usersRepository.GetUserByEmail(email);
+
+            if (user != null && user.IsActive)
+            {
+                var token = Guid.NewGuid().ToString();
+                var cacheKey = $"VERIFY_EMAIL_RESEND_{user.Email}";
+
+                // Check if user send resend verification
+                if (memoryCache.TryGetValue(cacheKey, out _))
+                {
+                    return BadRequest(new
+                    {
+                        Message = "You can resend the verification email in 2 minutes"
+                    });
+                }
+
+                // Set cache: key exists in 2 mins and block resend in 2 mins
+                memoryCache.Set($"VERIFY_EMAIL_RESEND_{user.Email}", true, TimeSpan.FromMinutes(2));
+
+                // Send verification code via email
+                memoryCache.Set($"EMAIL_VERIFY_{token}", user.Email, TimeSpan.FromMinutes(15));
+
+                // Send email verify
+                string senderName = "Back2Me";
+                string senderEmail = "baoandng07@gmail.com";
+                string toName = user.FirstName + " " + user.LastName;
+                string toEmail = user.Email;
+                string subject = "🔐 Reset Your Password";
+                string content = $@"
+                        <html>
+                        <head>
+                          <style>
+                            body {{
+                                font-family: 'Segoe UI', Arial, sans-serif;
+                                line-height: 1.6;
+                                color: #072138;
+                                background-color: #f9f9fb;
+                                padding: 20px;
+                            }}
+                            a {{
+                                text-decoration: none !important;
+                            }}
+                            .container {{
+                                max-width: 600px;
+                                margin: auto;
+                                background: #ffffff;
+                                border-radius: 12px;
+                                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                                overflow: hidden;
+                            }}
+                            .header {{
+                                background-color: #ec7207;
+                                color: #fff;
+                                padding: 20px;
+                                text-align: center;
+                            }}
+                            .header h2 {{
+                                margin: 0;
+                                font-size: 22px;
+                            }}
+                            .content {{
+                                padding: 20px;
+                            }}
+                            .content p {{
+                                margin: 10px 0;
+                            }}
+                            .highlight {{
+                                background: #fffae6;
+                                border-left: 4px solid #ff9900;
+                                padding: 10px 15px;
+                                margin: 15px 0;
+                                border-radius: 6px;
+                            }}
+                            .btn {{
+                                display: inline-block;
+                                background-color: #ec7207;
+                                border: none;
+                                width: max-content;
+                                color: #fff !important;
+                                font-weight: 600;
+                                cursor: pointer;
+                                font-size: 16px;
+                                padding: 12px 25px;
+                                border-radius: 20px;
+                                margin-top: 10px;
+                                margin-bottom: 10px;
+                                transition: all 0.3s ease-in-out;
+                            }}
+                            .btn:hover {{
+                                transform: scale(1.05);
+                            }}
+                            .footer {{
+                                background: #f4f6f9;
+                                padding: 15px;
+                                text-align: center;
+                                font-size: 0.9em;
+                                color: #666;
+                            }}
+                          </style>
+                        </head>
+                        <body>
+                          <div class='container'>
+                            <div class='header'>
+                              <h2>🔐 Reset Your Password</h2>
+                            </div>
+                            <div class='content'>
+                              <p>Hi <strong>{user.FirstName} {user.LastName}</strong>,</p>
+                              <p>We received a request to reset the password for your account</p>
+
+                              <p style='text-align: center;' class='highlight'>
+                                ⚡ This password reset link will expire in <strong>15 minutes</strong>.
+                              </p>
+
+                              <p style='text-align: center;'>
+                                 <a href='https://back2me.vercel.app/authentication/reset-password?token={token}' class='btn'> Reset Password </a>
+                              </p>
+
+                              <p>If you did not request a password reset, please ignore this email. Your account will remain secure.</p>
+                            </div>
+                            <div class='footer'>
+                              <p>Best regards,<br/><strong>Back2me Team</strong></p>
+                            </div>
+                          </div>
+                        </body>
+                        </html>
+                        ";
+
+                await emailSender.SendEmail(senderName, senderEmail, toName, toEmail, subject, content);
+            }
+
+            return Ok(new
+            {
+                Message = "If this email exists, we’ve sent a verification code"
+            });
+        }
+        #endregion
+
+        #region Confirm reset password
+        [HttpPut("confirm-reset-password/{email}/{newPassword}")]
+        public async Task<ActionResult> ConfirmResetPassword(string email, string newPassword)
+        {
+            // Check user if it exists
+            var user = await usersRepository.GetUserByEmail(email);
+
+            if (user != null && user.IsActive)
+            {
+                // Update information
+                user.FirstName = user.FirstName;
+                user.LastName = user.LastName;
+                user.DateOfBirth = user.DateOfBirth;
+                user.Avatar = user.Avatar;
+                user.UpdatedAt = DateTime.Now;
+
+
+                // Check new password if equals old password
+                var isNotValidPassword = BCrypt.Net.BCrypt.EnhancedVerify(newPassword, user.Password);
+
+                if (isNotValidPassword)
+                {
+                    return Conflict(new
+                    {
+                        Message = "Your new password must be different from your current password",
+                        Email = user.Email
+                    });
+                }
+
+                // Hash password
+                var hashNewPassword = BCrypt.Net.BCrypt.EnhancedHashPassword(newPassword);
+
+                user.Password = hashNewPassword;
+
+                var isUpdated = await usersRepository.UpdateUser();
+                if (!isUpdated)
+                {
+                    return BadRequest("Change password failed");
+                }
+
+                // Send email confirm email is changed successfully
+                string senderName = "Back2Me";
+                string senderEmail = "baoandng07@gmail.com";
+                string toName = user.FirstName + " " + user.LastName;
+                string toEmail = user.Email;
+                string subject = "✅ Your Password Has Been Changed Successfully";
+                string content = $@"
+                <html>
+                <head>
+                  <style>
+                    body {{
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                        line-height: 1.6;
+                        color: #072138;
+                        background-color: #f9f9fb;
+                        padding: 20px;
+                    }}
+                    a {{
+                        text-decoration: none !important;
+                    }}
+                    .container {{
+                        max-width: 600px;
+                        margin: auto;
+                        background: #ffffff;
+                        border-radius: 12px;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                        overflow: hidden;
+                    }}
+                    .header {{
+                        background-color: #22c55e;
+                        color: #fff;
+                        padding: 20px;
+                        text-align: center;
+                    }}
+                    .header h2 {{
+                        margin: 0;
+                        font-size: 22px;
+                    }}
+                    .content {{
+                        padding: 20px;
+                    }}
+                    .content p {{
+                        margin: 10px 0;
+                    }}
+                    .highlight {{
+                        background: #fffae6;
+                        border-left: 4px solid #ff9900;
+                        padding: 10px 15px;
+                        margin: 15px 0;
+                        border-radius: 6px;
+                    }}
+                    .footer {{
+                        background: #f4f6f9;
+                        padding: 15px;
+                        text-align: center;
+                        font-size: 0.9em;
+                        color: #666;
+                    }}
+                  </style>
+                </head>
+                <body>
+                  <div class='container'>
+                    <div class='header'>
+                      <h2>✅ Password Changed</h2>
+                    </div>
+
+                    <div class='content'>
+                      <p>Hi <strong>{user.FirstName} {user.LastName}</strong>,</p>
+
+                      <p>
+                        This is a confirmation that your account password has been
+                        <strong>successfully changed</strong>.
+                      </p>
+
+                      <div class='highlight'>
+                        🔐 If you made this change, no further action is required.
+                      </div>
+
+                      <p>
+                        If you did <strong>not</strong> change your password, please contact our
+                        support team immediately to secure your account.
+                      </p>
+                    </div>
+
+                    <div class='footer'>
+                      <p>
+                        Best regards,<br/>
+                        <strong>Back2me Team</strong>
+                      </p>
+                    </div>
+                  </div>
+                </body>
+                </html>
+                ";
+
+                await emailSender.SendEmail(senderName, senderEmail, toName, toEmail, subject, content);
+            }
+
+            return Ok(new
+            {
+                Message = "Changed password successfully"
+            });
+        }
+        #endregion
+
+        #region Confirm reset images
+        [HttpPut("confirm-reset-images/{email}/{image1}/{image2}")]
+        public async Task<ActionResult> ConfirmResetImages(string email, string image1, string image2)
+        {
+            // Check user if it exists
+            var user = await usersRepository.GetUserByEmail(email);
+
+            if (user != null && user.IsActive)
+            {
+                // Update information
+                user.FirstName = user.FirstName;
+                user.LastName = user.LastName;
+                user.DateOfBirth = user.DateOfBirth;
+                user.Avatar = user.Avatar;
+                user.UpdatedAt = DateTime.Now;
+                user.Password = user.Password;
+                user.PickImage1 = image1;
+                user.PickImage2 = image2;
+
+                var isUpdated = await usersRepository.UpdateUser();
+                if (!isUpdated)
+                {
+                    return BadRequest("Change images failed");
+                }
+
+                // Send email confirm email is changed successfully
+                string senderName = "Back2Me";
+                string senderEmail = "baoandng07@gmail.com";
+                string toName = user.FirstName + " " + user.LastName;
+                string toEmail = user.Email;
+                string subject = "✅ Your Second-Step Authentication Images Have Been Updated";
+                string content = $@"
+                <html>
+                <head>
+                  <style>
+                    body {{
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                        line-height: 1.6;
+                        color: #072138;
+                        background-color: #f9f9fb;
+                        padding: 20px;
+                    }}
+                    a {{
+                        text-decoration: none !important;
+                    }}
+                    .container {{
+                        max-width: 600px;
+                        margin: auto;
+                        background: #ffffff;
+                        border-radius: 12px;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                        overflow: hidden;
+                    }}
+                    .header {{
+                        background-color: #22c55e;
+                        color: #fff;
+                        padding: 20px;
+                        text-align: center;
+                    }}
+                    .header h2 {{
+                        margin: 0;
+                        font-size: 22px;
+                    }}
+                    .content {{
+                        padding: 20px;
+                    }}
+                    .content p {{
+                        margin: 10px 0;
+                    }}
+                    .highlight {{
+                        background: #fffae6;
+                        border-left: 4px solid #ff9900;
+                        padding: 10px 15px;
+                        margin: 15px 0;
+                        border-radius: 6px;
+                    }}
+                    .footer {{
+                        background: #f4f6f9;
+                        padding: 15px;
+                        text-align: center;
+                        font-size: 0.9em;
+                        color: #666;
+                    }}
+                  </style>
+                </head>
+                <body>
+                  <div class='container'>
+                    <div class='header'>
+                      <h2>✅ Authentication Images Updated</h2>
+                    </div>
+
+                    <div class='content'>
+                      <p>Hi <strong>{user.FirstName} {user.LastName}</strong>,</p>
+
+                      <p>
+                        This is a confirmation that your <strong>two authentication images</strong> used for the second-step login have been <strong>successfully updated</strong>.
+                      </p>
+
+                      <div class='highlight'>
+                        🔐 If you made this change, no further action is required.
+                      </div>
+
+                      <p>
+                        If you did <strong>not</strong> change your password, please contact our
+                        support team immediately to secure your account.
+                      </p>
+                    </div>
+
+                    <div class='footer'>
+                      <p>
+                        Best regards,<br/>
+                        <strong>Back2me Team</strong>
+                      </p>
+                    </div>
+                  </div>
+                </body>
+                </html>
+                ";
+
+                await emailSender.SendEmail(senderName, senderEmail, toName, toEmail, subject, content);
+            }
+
+            return Ok(new
+            {
+                Message = "Changed images successfully"
+            });
         }
         #endregion
 

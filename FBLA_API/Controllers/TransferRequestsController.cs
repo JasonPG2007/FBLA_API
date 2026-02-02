@@ -1,6 +1,7 @@
 ﻿using FBLA_API.DTOs.Users;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using ObjectBusiness;
 using Repository;
 using System.Threading.Tasks;
@@ -130,6 +131,16 @@ namespace FBLA_API.Controllers
             }
 
             return BadRequest("Create request failed or post not found");
+        }
+        #endregion
+
+        #region Search Transfer Request for Admin
+        [Authorize(Roles = "Admin")]
+        [HttpGet("search-request")]
+        public async Task<ActionResult<List<TransferRequests>>> SearchFirstNameRequest([FromQuery] string query)
+        {
+            var posts = await transferRequestRepository.SearchRequest(query).ToListAsync();
+            return Ok(posts);
         }
         #endregion
 

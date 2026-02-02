@@ -10,6 +10,7 @@ namespace Repository
     public interface IPostRepository
     {
         public Task<bool> CreatePost(Posts post);
+        public Task<bool> UpdatePost(Posts postEntry);
         public IQueryable<Posts> GetFoundPosts();
         public IQueryable<object> GetLostPostsPerMonth();
         public IQueryable<object> GetFoundPostsPerMonth();
@@ -18,6 +19,7 @@ namespace Repository
         public IQueryable<Posts> SortByStatus(TypePost typePost, int userId);
         public Task<Posts> GetPostById(int postId);
         public Task<Posts> MarkReceived(int postId);
+        public Task<bool> DeletePost(int postId);
         public IQueryable<Posts> SearchCodes(string query);
         public IQueryable<Posts> AllPosts();
         public IQueryable<Posts> AllPostsByUserId(int userId);

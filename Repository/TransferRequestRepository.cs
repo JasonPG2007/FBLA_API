@@ -136,10 +136,17 @@ namespace Repository
         }
         #endregion
 
-        #region All Requests
+        #region Check Status Request Post
         public async Task<TransferRequests> CheckStatusRequestPost(int postId)
         {
             return await transferRequestDAO.CheckStatusRequestPost(postId);
+        }
+        #endregion
+
+        #region Search Request
+        public IQueryable<TransferRequests> SearchRequest(string query)
+        {
+            return transferRequestDAO.SearchRequest(query);
         }
         #endregion
     }

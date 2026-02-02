@@ -107,6 +107,62 @@ namespace DataAccess
         }
         #endregion
 
+        #region Search Request
+        public IQueryable<TransferRequests> SearchRequest(string query)
+        {
+            var listRequests = (from t in db.TransferRequests
+                                join u in db.Users
+                                on t.UserId equals u.UserId
+                                join p in db.Posts
+                                on t.PostId equals p.PostId
+                                where p.TypePost == TypePost.Found && (u.FirstName + u.LastName).Contains(query)
+                                select new TransferRequests
+                                {
+                                    UserId = t.UserId,
+                                    PostId = t.PostId,
+                                    Status = t.Status,
+                                    CreatedAt = t.CreatedAt,
+                                    ConfirmedAt = t.ConfirmedAt,
+                                    RequestId = t.RequestId,
+                                    FirstName = u.FirstName,
+                                    LastName = u.LastName,
+                                    NameItem = p.Title,
+                                    Role = u.Role
+                                }).OrderByDescending(t => t.CreatedAt);
+            return listRequests;
+        }
+        #endregion
+
+        #region All Requests
+        public async Task<List<TransferRequests>> AllRequestsByPostId(int postId)
+        {
+            var listRequests = await db.TransferRequests.Where(t => t.PostId == postId).ToListAsync();
+            return listRequests;
+        }
+        #endregion
+
+        #region Delete All Transfer requests Of Post
+        public async Task<bool> DeleteTransfers(List<TransferRequests> transferRequests)
+        {
+            if (transferRequests == null || !transferRequests.Any())
+            {
+                return false;
+            }
+
+            try
+            {
+                db.TransferRequests.RemoveRange(transferRequests);
+                await db.SaveChangesAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+        #endregion
+
         #region Check Status of Post
         public async Task<TransferRequests> CheckStatusRequestPost(int postId)
         {

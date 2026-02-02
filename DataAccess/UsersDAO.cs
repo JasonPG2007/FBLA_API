@@ -93,7 +93,26 @@ namespace DataAccess
         #region Search User By Email
         public IQueryable<Users> SearchUserByEmail(string query)
         {
-            var users = db.Users.Where(s => s.Email.Contains(query) && s.Role == Role.Student);
+            var users = (from s in db.Student
+                         join u in db.Users
+                         on s.UserId equals u.UserId
+                         where u.Role == Role.Student && u.Email.Contains(query)
+                         select new Users
+                         {
+                             UserId = u.UserId,
+                             FirstName = u.FirstName,
+                             LastName = u.LastName,
+                             Email = u.Email,
+                             Role = u.Role,
+                             Avatar = u.Avatar,
+                             IsActive = u.IsActive,
+                             IsAgreedToTerms = u.IsAgreedToTerms,
+                             IsVerifiedEmail = u.IsVerifiedEmail,
+                             CreatedAt = u.CreatedAt,
+                             StudentId = s.StudentId
+                         })
+                         .AsNoTracking()
+                         .OrderByDescending(u => u.FirstName);
             return users;
         }
         #endregion

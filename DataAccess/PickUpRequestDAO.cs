@@ -103,6 +103,26 @@ namespace DataAccess
         }
         #endregion
 
+        #region Search Request
+        public IQueryable<PickUpRequest> SearchRequest(string query)
+        {
+            var listRequests = (from t in db.PickUpRequest
+                                join p in db.Posts
+                                on t.PostId equals p.PostId
+                                where p.TypePost == TypePost.Lost && t.Description.Contains(query)
+                                select new PickUpRequest
+                                {
+                                    PostId = t.PostId,
+                                    CreatedDate = t.CreatedDate,
+                                    Description = t.Description,
+                                    PickUpDate = t.PickUpDate,
+                                    RequestId = t.RequestId,
+                                    Status = t.Status,
+                                }).OrderByDescending(t => t.CreatedDate);
+            return listRequests;
+        }
+        #endregion
+
         #region Check Contains Post
         public async Task<PickUpRequest> CheckContainsPost(int postId)
         {

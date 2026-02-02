@@ -32,8 +32,15 @@ namespace DataAccess
             var isAdded = db.Posts.Add(post);
             if (isAdded != null)
             {
-                await db.SaveChangesAsync();
-                return true;
+                try
+                {
+                    await db.SaveChangesAsync();
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    return false;
+                }
             }
             return false;
         }
@@ -53,6 +60,7 @@ namespace DataAccess
         public IQueryable<Posts> AllPostsByUserId(int userId)
         {
             var listPosts = db.Posts
+                              .Include(u => u.User)
                               .Where(p => p.UserId == userId)
                               .OrderByDescending(p => p.CreatedAt)
                               .AsNoTracking();
@@ -380,7 +388,24 @@ namespace DataAccess
         #region Delete post
         public async Task<bool> DeletePost(int postId)
         {
-            return false;
+            var post = await GetPostById(postId);
+
+            if (post == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                var requestDeleted = db.Posts.Remove(post);
+                await db.SaveChangesAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
         }
         #endregion
 
@@ -406,6 +431,21 @@ namespace DataAccess
             }
 
             return dotProduct / (Math.Sqrt(magnitudeA) * Math.Sqrt(magnitudeB));
+        }
+        #endregion
+
+        #region Update post
+        public async Task<bool> UpdatePost()
+        {
+            try
+            {
+                await db.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
         }
         #endregion
     }

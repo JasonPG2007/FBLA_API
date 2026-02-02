@@ -52,6 +52,16 @@ namespace FBLA_API.Controllers
             return request;
         }
 
+        #region Search Pick-Up Request for Admin
+        [Authorize(Roles = "Admin")]
+        [HttpGet("search-request")]
+        public async Task<ActionResult<List<PickUpRequest>>> SearchRequest([FromQuery] string query)
+        {
+            var posts = await pickUpRequestRepository.SearchRequest(query).ToListAsync();
+            return Ok(posts);
+        }
+        #endregion
+
         [Authorize]
         [HttpGet("check-status-post-pick-up/{postId}")]
         public async Task<ActionResult<PickUpRequest>> CheckStatusPostPickUp(int postId)
