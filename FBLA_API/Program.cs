@@ -74,7 +74,7 @@ builder.Services.AddAuthentication(options =>
 
 // Add SignalR
 builder.Services.AddSignalR()
-       .AddAzureSignalR() // Use azure signalR service
+       //.AddAzureSignalR() // Use azure signalR service
        .AddJsonProtocol(options =>
 {
     options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()); // To handle enum serialization
