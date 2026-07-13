@@ -32,6 +32,48 @@ namespace ObjectBusiness
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<MessageChat>()
+                .HasOne(m => m.Chat)
+                .WithMany(c => c.Messages)
+                .HasForeignKey(m => m.ChatId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<Notifications>()
+                .HasOne(m => m.PostOriginal)
+                .WithMany()
+                .HasForeignKey(m => m.PostOriginalId)
+                .OnDelete(DeleteBehavior.NoAction); // Prevent multiple cascade paths issue in SQL Server
+
+            modelBuilder.Entity<Notifications>()
+                .HasOne(m => m.PostMatched)
+                .WithMany()
+                .HasForeignKey(m => m.PostMatchedId)
+                .OnDelete(DeleteBehavior.NoAction); // Prevent multiple cascade paths issue in SQL Server
+
+            modelBuilder.Entity<Match>()
+                .HasOne(m => m.LostPost)
+                .WithMany()
+                .HasForeignKey(m => m.LostPostId)
+                .OnDelete(DeleteBehavior.NoAction); // Prevent multiple cascade paths issue in SQL Server
+
+            modelBuilder.Entity<Match>()
+                .HasOne(m => m.FoundPost)
+                .WithMany()
+                .HasForeignKey(m => m.FoundPostId)
+                .OnDelete(DeleteBehavior.NoAction); // Prevent multiple cascade paths issue in SQL Server
+
+            modelBuilder.Entity<Chat>()
+                .HasOne(c => c.UserA)
+                .WithMany()
+                .HasForeignKey(c => c.UserAId)
+                .OnDelete(DeleteBehavior.NoAction); // Prevent multiple cascade paths issue in SQL Server
+
+            modelBuilder.Entity<Chat>()
+                .HasOne(c => c.UserB)
+                .WithMany()
+                .HasForeignKey(c => c.UserBId)
+                .OnDelete(DeleteBehavior.NoAction); // Prevent multiple cascade paths issue in SQL Server
+
             // Allow converting enum to string
             modelBuilder.Entity<Users>()
                 .Property(u => u.Role)

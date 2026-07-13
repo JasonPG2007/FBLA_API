@@ -44,39 +44,39 @@ namespace ObjectBusiness.Migrations
                     b.HasData(
                         new
                         {
-                            CategoryPostId = 461402948,
+                            CategoryPostId = 1952444642,
                             CategoryPostName = "IPhone",
-                            CreatedAt = new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6848)
+                            CreatedAt = new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3922)
                         },
                         new
                         {
-                            CategoryPostId = 803021818,
+                            CategoryPostId = 2061143652,
                             CategoryPostName = "IPad",
-                            CreatedAt = new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6852)
+                            CreatedAt = new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3926)
                         },
                         new
                         {
-                            CategoryPostId = 383189729,
+                            CategoryPostId = 929109465,
                             CategoryPostName = "Chromebook",
-                            CreatedAt = new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6872)
+                            CreatedAt = new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3930)
                         },
                         new
                         {
-                            CategoryPostId = 1443239555,
+                            CategoryPostId = 924885811,
                             CategoryPostName = "Earbuds",
-                            CreatedAt = new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6877)
+                            CreatedAt = new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3936)
                         },
                         new
                         {
-                            CategoryPostId = 1166545142,
+                            CategoryPostId = 545666353,
                             CategoryPostName = "Wallet",
-                            CreatedAt = new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6881)
+                            CreatedAt = new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3941)
                         },
                         new
                         {
-                            CategoryPostId = 1729618956,
+                            CategoryPostId = 1983792486,
                             CategoryPostName = "Charger",
-                            CreatedAt = new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6885)
+                            CreatedAt = new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3945)
                         });
                 });
 
@@ -410,9 +410,9 @@ namespace ObjectBusiness.Migrations
                     b.HasData(
                         new
                         {
-                            UserId = 1479790246,
+                            UserId = 526485921,
                             Avatar = "avatar_CV.jpg",
-                            CreatedAt = new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6676),
+                            CreatedAt = new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3737),
                             DateOfBirth = new DateTime(2007, 1, 30, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "baoanwebapp@gmail.com",
                             FirstName = "Media",
@@ -467,13 +467,13 @@ namespace ObjectBusiness.Migrations
                     b.HasOne("ObjectBusiness.Users", "UserA")
                         .WithMany()
                         .HasForeignKey("UserAId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("ObjectBusiness.Users", "UserB")
                         .WithMany()
                         .HasForeignKey("UserBId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.Navigation("Post");
@@ -488,13 +488,13 @@ namespace ObjectBusiness.Migrations
                     b.HasOne("ObjectBusiness.Posts", "FoundPost")
                         .WithMany()
                         .HasForeignKey("FoundPostId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("ObjectBusiness.Posts", "LostPost")
                         .WithMany()
                         .HasForeignKey("LostPostId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.Navigation("FoundPost");
@@ -507,7 +507,7 @@ namespace ObjectBusiness.Migrations
                     b.HasOne("ObjectBusiness.Chat", "Chat")
                         .WithMany("Messages")
                         .HasForeignKey("ChatId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("ObjectBusiness.Users", "UserSender")
@@ -526,13 +526,13 @@ namespace ObjectBusiness.Migrations
                     b.HasOne("ObjectBusiness.Posts", "PostMatched")
                         .WithMany()
                         .HasForeignKey("PostMatchedId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("ObjectBusiness.Posts", "PostOriginal")
                         .WithMany()
                         .HasForeignKey("PostOriginalId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.Navigation("PostMatched");

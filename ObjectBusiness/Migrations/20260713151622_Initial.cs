@@ -133,14 +133,12 @@ namespace ObjectBusiness.Migrations
                         name: "FK_Chat_Users_UserAId",
                         column: x => x.UserAId,
                         principalTable: "Users",
-                        principalColumn: "UserId",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "UserId");
                     table.ForeignKey(
                         name: "FK_Chat_Users_UserBId",
                         column: x => x.UserBId,
                         principalTable: "Users",
-                        principalColumn: "UserId",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "UserId");
                 });
 
             migrationBuilder.CreateTable(
@@ -160,14 +158,12 @@ namespace ObjectBusiness.Migrations
                         name: "FK_Match_Posts_FoundPostId",
                         column: x => x.FoundPostId,
                         principalTable: "Posts",
-                        principalColumn: "PostId",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "PostId");
                     table.ForeignKey(
                         name: "FK_Match_Posts_LostPostId",
                         column: x => x.LostPostId,
                         principalTable: "Posts",
-                        principalColumn: "PostId",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "PostId");
                 });
 
             migrationBuilder.CreateTable(
@@ -190,14 +186,12 @@ namespace ObjectBusiness.Migrations
                         name: "FK_Notifications_Posts_PostMatchedId",
                         column: x => x.PostMatchedId,
                         principalTable: "Posts",
-                        principalColumn: "PostId",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "PostId");
                     table.ForeignKey(
                         name: "FK_Notifications_Posts_PostOriginalId",
                         column: x => x.PostOriginalId,
                         principalTable: "Posts",
-                        principalColumn: "PostId",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "PostId");
                 });
 
             migrationBuilder.CreateTable(
@@ -264,8 +258,7 @@ namespace ObjectBusiness.Migrations
                         name: "FK_MessageChat_Chat_ChatId",
                         column: x => x.ChatId,
                         principalTable: "Chat",
-                        principalColumn: "ChatId",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "ChatId");
                     table.ForeignKey(
                         name: "FK_MessageChat_Users_UserSenderId",
                         column: x => x.UserSenderId,
@@ -301,18 +294,18 @@ namespace ObjectBusiness.Migrations
                 columns: new[] { "CategoryPostId", "CategoryPostName", "CreatedAt", "UpdatedAt" },
                 values: new object[,]
                 {
-                    { 383189729, "Chromebook", new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6872), null },
-                    { 461402948, "IPhone", new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6848), null },
-                    { 803021818, "IPad", new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6852), null },
-                    { 1166545142, "Wallet", new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6881), null },
-                    { 1443239555, "Earbuds", new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6877), null },
-                    { 1729618956, "Charger", new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6885), null }
+                    { 545666353, "Wallet", new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3941), null },
+                    { 924885811, "Earbuds", new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3936), null },
+                    { 929109465, "Chromebook", new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3930), null },
+                    { 1952444642, "IPhone", new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3922), null },
+                    { 1983792486, "Charger", new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3945), null },
+                    { 2061143652, "IPad", new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3926), null }
                 });
 
             migrationBuilder.InsertData(
                 table: "Users",
                 columns: new[] { "UserId", "Avatar", "CreatedAt", "DateOfBirth", "Email", "FirstName", "IsActive", "IsAgreedToTerms", "IsVerifiedEmail", "LastName", "Password", "PickImage1", "PickImage2", "Role", "UpdatedAt" },
-                values: new object[] { 1479790246, "avatar_CV.jpg", new DateTime(2026, 2, 1, 23, 45, 9, 843, DateTimeKind.Local).AddTicks(6676), new DateTime(2007, 1, 30, 0, 0, 0, 0, DateTimeKind.Unspecified), "baoanwebapp@gmail.com", "Media", true, true, false, "Center", "$2a$11$92uWViLQUKTIVIADFxhzqe39tDMoLWJX5e1FyXaeedfrq5CoMAGQ6", "1", "12", "Admin", null });
+                values: new object[] { 526485921, "avatar_CV.jpg", new DateTime(2026, 7, 13, 11, 16, 21, 718, DateTimeKind.Local).AddTicks(3737), new DateTime(2007, 1, 30, 0, 0, 0, 0, DateTimeKind.Unspecified), "baoanwebapp@gmail.com", "Media", true, true, false, "Center", "$2a$11$92uWViLQUKTIVIADFxhzqe39tDMoLWJX5e1FyXaeedfrq5CoMAGQ6", "1", "12", "Admin", null });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Chat_PostId",
